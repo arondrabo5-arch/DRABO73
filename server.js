@@ -26,4 +26,13 @@ const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`DRABO73 lancé sur le port ${PORT}`);
+});app.get("/api/football/status", (req, res) => {
+  const apiKey = process.env.FOOTBALL_DATA_API_KEY;
+
+  res.json({
+    application: "DRABO73 VIP PRONOS",
+    football_api: apiKey ? "Clé configurée" : "Clé manquante",
+    status: apiKey ? "Prêt à tester" : "En attente de la clé API",
+    slogan: "La confiance reste"
+  });
 });
