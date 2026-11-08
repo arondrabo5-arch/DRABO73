@@ -1,5 +1,4 @@
-DRABO73/
-├── server.js
+server.js
 ├── package.json
 ├── .env.example
 ├── .gitignore
