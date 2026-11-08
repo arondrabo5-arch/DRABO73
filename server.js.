@@ -1,0 +1,19 @@
+DRABO73/
+├── server.js
+├── package.json
+├── .env.example
+├── .gitignore
+├── config/
+│   └── football.js
+├── routes/
+│   ├── status.js
+│   ├── matches.js
+│   ├── predictions.js
+│   └── vip.js
+├── services/
+│   ├── footballService.js
+│   ├── predictionService.js
+│   └── vipService.js
+├── middleware/
+│   └── errorHandler.js
+└── README.md
