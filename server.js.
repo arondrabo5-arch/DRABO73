@@ -1,4 +1,4 @@
-const express = require("express");
+require("express");
 const cors = require("cors");
 
 const app = express();
@@ -53,4 +53,3 @@ app.listen(PORT, () => {
 
 app.listen(PORT, () => {
   console.log(`DRABO73 serveur actif sur le port ${PORT}`);
-});
