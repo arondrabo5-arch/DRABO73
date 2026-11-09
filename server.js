@@ -11,22 +11,48 @@ const API_KEY = process.env.FOOTBALL_DATA_API_KEY;
 const API = "https://api.football-data.org/v4";
 
 const CACHE_DURATION = 5 * 60 * 1000;
-let cache = {};
-let cacheTime = {};
+const cache = new Map();
 
 function getBurkinaDate() {
-  return new Intl.DateTimeFormat("en-CA", {
+  const parts = new Intl.DateTimeFormat("en-CA", {
     timeZone: "Africa/Ouagadougou",
     year: "numeric",
     month: "2-digit",
     day: "2-digit"
-  }).format(new Date());
+  }).formatToParts(new Date());
+
+  const values = {};
+  parts.forEach(p => values[p.type] = p.value);
+
+  return `${values.year}-${values.month}-${values.day}`;
 }
 
 function addDays(date, days) {
   const d = new Date(date + "T12:00:00Z");
   d.setUTCDate(d.getUTCDate() + days);
   return d.toISOString().slice(0, 10);
+}
+
+function validDate(date) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return false;
+
+  const d = new Date(date + "T00:00:00Z");
+
+  return !Number.isNaN(d.getTime()) &&
+    d.toISOString().slice(0, 10) === date;
+}
+
+function validatePeriod(dateFrom, dateTo) {
+  if (!validDate(dateFrom) || !validDate(dateTo)) {
+    return false;
+  }
+
+  const start = Date.parse(dateFrom + "T00:00:00Z");
+  const end = Date.parse(dateTo + "T00:00:00Z");
+
+  const days = (end - start) / 86400000;
+
+  return days >= 0 && days <= 9;
 }
 
 async function footballRequest(endpoint) {
@@ -39,16 +65,46 @@ async function footballRequest(endpoint) {
     headers: {
       "X-Auth-Token": API_KEY,
       "Accept": "application/json"
-    }
+    },
+    signal: AbortSignal.timeout(15000)
   });
 
-  const data = await response.json();
+  const data = await response.json().catch(() => ({}));
 
   if (!response.ok) {
+    if (response.status === 401) {
+      throw new Error("Jeton API invalide (401). Vérifie FOOTBALL_DATA_API_KEY.");
+    }
+
+    if (response.status === 403) {
+      throw new Error("Accès refusé (403). Vérifie les compétitions autorisées.");
+    }
+
+    if (response.status === 429) {
+      throw new Error("Limite de requêtes API atteinte. Réessaie plus tard.");
+    }
+
     throw new Error(
-      data.message || `Erreur Football API: ${response.status}`
+      data.message || `Erreur Football-data.org : ${response.status}`
     );
   }
+
+  return data;
+}
+
+async function getCached(key, callback) {
+  const item = cache.get(key);
+
+  if (item && Date.now() - item.time < CACHE_DURATION) {
+    return item.data;
+  }
+
+  const data = await callback();
+
+  cache.set(key, {
+    data,
+    time: Date.now()
+  });
 
   return data;
 }
@@ -63,44 +119,49 @@ app.get("/", (req, res) => {
   });
 });
 
-// STATUT DU SERVEUR ET API
-app.get("/api/status", (req, res) => {
-  res.json({
+// STATUT ET VÉRIFICATION RÉELLE API
+app.get("/api/status", async (req, res) => {
+  const result = {
     status: "OK",
     application: "DRABO73 VIP PRONOS",
     football_api_configured: Boolean(API_KEY),
-    api_connection: API_KEY ? "CONFIGURED" : "NOT_CONFIGURED",
+    api_connection: "NOT_CONNECTED",
     date: getBurkinaDate()
-  });
+  };
+
+  if (!API_KEY) {
+    return res.status(503).json({
+      ...result,
+      status: "ERROR",
+      message: "Jeton API absent"
+    });
+  }
+
+  try {
+    await footballRequest("/competitions");
+
+    result.api_connection = "CONNECTED";
+    result.message = "Connexion Football-data.org réussie";
+
+    res.json(result);
+  } catch (error) {
+    res.status(502).json({
+      ...result,
+      status: "ERROR",
+      message: error.message
+    });
+  }
 });
 
-// MATCHS DU JOUR
+// MATCHS DU JOUR ET AUTRES DATES
 app.get("/api/matches", async (req, res) => {
   try {
-    if (!API_KEY) {
-      return res.status(503).json({
-        status: "ERROR",
-        message: "Jeton Football-data.org non configuré"
-      });
-    }
-
     const today = getBurkinaDate();
+
     const dateFrom = req.query.dateFrom || today;
-    const dateTo = req.query.dateTo || today;
+    const dateTo = req.query.dateTo || dateFrom;
 
-    const start = new Date(dateFrom + "T00:00:00Z");
-    const end = new Date(dateTo + "T00:00:00Z");
-
-    const days = Math.round(
-      (end - start) / (24 * 60 * 60 * 1000)
-    );
-
-    if (
-      Number.isNaN(start.getTime()) ||
-      Number.isNaN(end.getTime()) ||
-      days < 0 ||
-      days > 9
-    ) {
+    if (!validatePeriod(dateFrom, dateTo)) {
       return res.status(400).json({
         status: "ERROR",
         message: "La période doit être comprise entre 1 et 10 jours."
@@ -109,40 +170,33 @@ app.get("/api/matches", async (req, res) => {
 
     const competition = req.query.competition || "";
 
-    const cacheKey = `${dateFrom}_${dateTo}_${competition}`;
+    const key = `matches_${dateFrom}_${dateTo}_${competition}`;
 
-    if (
-      cache[cacheKey] &&
-      Date.now() - cacheTime[cacheKey] < CACHE_DURATION
-    ) {
-      return res.json(cache[cacheKey]);
-    }
+    const result = await getCached(key, async () => {
+      let endpoint =
+        `/matches?dateFrom=${dateFrom}&dateTo=${dateTo}`;
 
-    let endpoint =
-      `/matches?dateFrom=${dateFrom}&dateTo=${dateTo}`;
+      if (competition) {
+        endpoint += `&competitions=${encodeURIComponent(competition)}`;
+      }
 
-    if (competition) {
-      endpoint += `&competitions=${encodeURIComponent(competition)}`;
-    }
+      const data = await footballRequest(endpoint);
+      const matches = data.matches || [];
 
-    const data = await footballRequest(endpoint);
-
-    const result = {
-      status: "OK",
-      application: "DRABO73 VIP PRONOS",
-      api_connection: "CONNECTED",
-      dateFrom,
-      dateTo,
-      competition: competition || "Toutes les compétitions accessibles",
-      totalMatches: data.matches ? data.matches.length : 0,
-      message: data.matches && data.matches.length
-        ? "Rencontres réelles récupérées"
-        : "Aucune rencontre disponible pour cette période",
-      matches: data.matches || []
-    };
-
-    cache[cacheKey] = result;
-    cacheTime[cacheKey] = Date.now();
+      return {
+        status: "OK",
+        application: "DRABO73 VIP PRONOS",
+        api_connection: "CONNECTED",
+        dateFrom,
+        dateTo,
+        competition: competition || "Toutes les compétitions accessibles",
+        totalMatches: matches.length,
+        message: matches.length
+          ? "Rencontres réelles récupérées"
+          : "Aucune rencontre disponible pour cette période",
+        matches
+      };
+    });
 
     res.json(result);
 
@@ -158,7 +212,9 @@ app.get("/api/matches", async (req, res) => {
 // COMPÉTITIONS DISPONIBLES
 app.get("/api/competitions", async (req, res) => {
   try {
-    const data = await footballRequest("/competitions");
+    const data = await getCached("competitions", () =>
+      footballRequest("/competitions")
+    );
 
     res.json({
       status: "OK",
@@ -176,45 +232,40 @@ app.get("/api/competitions", async (req, res) => {
   }
 });
 
-// RÉSULTATS DES MATCHS
+// HISTORIQUE DES RÉSULTATS
 app.get("/api/results", async (req, res) => {
   try {
     const today = getBurkinaDate();
+
     const dateFrom = req.query.dateFrom || addDays(today, -7);
     const dateTo = req.query.dateTo || today;
 
-    const start = new Date(dateFrom + "T00:00:00Z");
-    const end = new Date(dateTo + "T00:00:00Z");
-
-    const days = Math.round(
-      (end - start) / (24 * 60 * 60 * 1000)
-    );
-
-    if (
-      Number.isNaN(start.getTime()) ||
-      Number.isNaN(end.getTime()) ||
-      days < 0 ||
-      days > 9
-    ) {
+    if (!validatePeriod(dateFrom, dateTo)) {
       return res.status(400).json({
         status: "ERROR",
         message: "La période des résultats ne peut pas dépasser 10 jours."
       });
     }
 
-    const data = await footballRequest(
-      `/matches?dateFrom=${dateFrom}&dateTo=${dateTo}`
-    );
+    const key = `results_${dateFrom}_${dateTo}`;
 
-    const finished = (data.matches || []).filter(
-      match => match.status === "FINISHED"
-    );
+    const result = await getCached(key, async () => {
+      const data = await footballRequest(
+        `/matches?dateFrom=${dateFrom}&dateTo=${dateTo}`
+      );
 
-    res.json({
-      status: "OK",
-      totalResults: finished.length,
-      results: finished
+      const finished = (data.matches || []).filter(
+        match => match.status === "FINISHED"
+      );
+
+      return {
+        status: "OK",
+        totalResults: finished.length,
+        results: finished
+      };
     });
+
+    res.json(result);
 
   } catch (error) {
     res.status(502).json({
