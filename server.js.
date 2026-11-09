@@ -14,8 +14,7 @@ app.get("/", (req, res) => {
 
 app.get("/api/status", (req, res) => {
   res.json({ status: "OK", application: "DRABO73" });
-});
-
+})
 app.get("/api/matches", async (req, res) => {
   const token = process.env.FOOTBALL_DATA_API_KEY;
 
