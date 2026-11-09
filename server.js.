@@ -16,78 +16,84 @@ const FOOTBALL_API = "https://api.football-data.org/v4";
 app.get("/", (req, res) => {
   res.json({
     application: "DRABO73 VIP PRONOS",
+    message: "Bienvenue sur DRABO73",
     slogan: "La confiance reste",
     status: "Serveur actif"
   });
 });
 
-// Statut du serveur
+// Vérification du serveur
 app.get("/api/status", (req, res) => {
   res.json({
     status: "OK",
-    application: "DRABO73",
-    apiConfigured: Boolean(API_KEY)
+    application: "DRABO73 VIP PRONOS",
+    football_api_configured: Boolean(API_KEY)
   });
 });
 
-// Matchs réels football-data.org
+// Matchs de football réels
 app.get("/api/matches", async (req, res) => {
-  if (!API_KEY) {
-    return res.status(503).json({
-      status: "ERROR",
-      message: "FOOTBALL_DATA_API_KEY non configurée sur Render"
-    });
-  }
-
   try {
-    const response = await fetch(
-      `${FOOTBALL_API}/matches`,
-      {
-        method: "GET",
-        headers: {
-          "X-Auth-Token": API_KEY
-        }
+    if (!API_KEY) {
+      return res.status(500).json({
+        status: "ERROR",
+        message: "Clé FOOTBALL_DATA_API_KEY non configurée sur Render"
+      });
+    }
+
+    const dateFrom = req.query.dateFrom;
+    const dateTo = req.query.dateTo;
+
+    const params = new URLSearchParams();
+
+    if (dateFrom) params.set("dateFrom", dateFrom);
+    if (dateTo) params.set("dateTo", dateTo);
+
+    const url =
+      `${FOOTBALL_API}/matches` +
+      (params.toString() ? `?${params.toString()}` : "");
+
+    const response = await fetch(url, {
+      method: "GET",
+      headers: {
+        "X-Auth-Token": API_KEY
       }
-    );
+    });
 
     const data = await response.json();
 
     if (!response.ok) {
       return res.status(response.status).json({
         status: "ERROR",
-        message: data.message || "Erreur football-data.org"
+        message: "Erreur football-data.org",
+        api_status: response.status,
+        details: data
       });
     }
 
-    res.json({
+    return res.json({
       status: "OK",
       application: "DRABO73 VIP PRONOS",
-      total: data.resultSet?.count || data.matches?.length || 0,
+      totalMatches: data.resultSet?.count ?? data.matches?.length ?? 0,
       matches: data.matches || []
     });
 
   } catch (error) {
-    res.status(500).json({
+    console.error("Erreur matchs :", error.message);
+
+    return res.status(500).json({
       status: "ERROR",
-      message: "Impossible de contacter football-data.org"
+      message: "Impossible de récupérer les matchs",
+      details: error.message
     });
   }
 });
 
-// Route analyses
-app.get("/api/predictions", (req, res) => {
-  res.json({
-    status: "OK",
-    message: "Service de pronostics disponible",
-    predictions: []
-  });
-});
-
-// Route VIP
+// Informations VIP
 app.get("/api/vip", (req, res) => {
   res.json({
-    status: "OK",
     application: "DRABO73 VIP PRONOS",
+    slogan: "La confiance reste",
     plans: [
       { duration: "7 jours", price: 5000 },
       { duration: "30 jours", price: 15000 },
@@ -107,5 +113,7 @@ app.use((req, res) => {
 
 // Démarrage
 app.listen(PORT, () => {
-  console.log(`DRABO73 VIP PRONOS actif sur le port ${PORT}`);
+  console.log(
+    `DRABO73 VIP PRONOS actif sur le port ${PORT}`
+  );
 });
