@@ -1,18 +1,53 @@
-server.js
-├── package.json
-├── .env.example
-├── .gitignore
-├── config/
-│   └── football.js
-├── routes/
-│   ├── status.js
-│   ├── matches.js
-│   ├── predictions.js
-│   └── vip.js
-├── services/
-│   ├── footballService.js
-│   ├── predictionService.js
-│   └── vipService.js
-├── middleware/
-│   └── errorHandler.js
-└── README.m
+const express = require("express");
+const cors = require("cors");
+
+const app = express();
+app.use(cors());
+app.use(express.json());
+
+app.get("/", (req, res) => {
+  res.json({
+    application: "DRABO73 VIP PRONOS",
+    status: "Serveur actif"
+  });
+});
+
+app.get("/api/status", (req, res) => {
+  res.json({ status: "OK", application: "DRABO73" });
+});
+
+app.get("/api/matches", async (req, res) => {
+  const token = process.env.FOOTBALL_DATA_API_KEY;
+
+  if (!token) {
+    return res.status(503).json({
+      error: "Clé FOOTBALL_DATA_API_KEY absente dans Render"
+    });
+  }
+
+  try {
+    const response = await fetch(
+      "https://api.football-data.org/v4/matches",
+      {
+        headers: { "X-Auth-Token": token }
+      }
+    );
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      return res.status(response.status).json(data);
+    }
+
+    res.json(data);
+  } catch (error) {
+    res.status(500).json({
+      error: "Erreur de connexion à football-data.org"
+    });
+  }
+});
+
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`DRABO73 serveur actif sur le port ${PORT}`);
+});
