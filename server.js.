@@ -49,4 +49,8 @@ app.get("/api/matches", async (req, res) => {
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`DRABO73 serveur actif sur le port ${PORT}`);
+});const PORT = process.env.PORT || 3000;
+
+app.listen(PORT, () => {
+  console.log(`DRABO73 serveur actif sur le port ${PORT}`);
 });
