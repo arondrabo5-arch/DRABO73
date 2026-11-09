@@ -3,22 +3,70 @@ const express = require("express");
 const cors = require("cors");
 
 const app = express();
-
 app.use(cors());
 app.use(express.json());
 
 const PORT = process.env.PORT || 3000;
 const API_KEY = process.env.FOOTBALL_DATA_API_KEY;
-const FOOTBALL_API = "https://api.football-data.org/v4";
+const API = "https://api.football-data.org/v4";
 
-// DATE DU BURKINA FASO
-function getBurkinaDate() {
+function burkinaDate(date = new Date()) {
   return new Intl.DateTimeFormat("en-CA", {
     timeZone: "Africa/Ouagadougou",
     year: "numeric",
     month: "2-digit",
     day: "2-digit"
-  }).format(new Date());
+  }).format(date);
+}
+
+function addDays(date, days) {
+  const d = new Date(date);
+  d.setDate(d.getDate() + days);
+  return burkinaDate(d);
+}
+
+async function getMatches(from, to) {
+  if (!API_KEY) {
+    throw new Error("Jeton API non configuré");
+  }
+
+  const response = await fetch(
+    `${API}/matches?dateFrom=${from}&dateTo=${to}`,
+    {
+      headers: { "X-Auth-Token": API_KEY }
+    }
+  );
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(
+      data.message || "Erreur football-data.org"
+    );
+  }
+
+  return data.matches || [];
+}
+
+function formatMatches(matches) {
+  return matches.map(m => ({
+    id: m.id,
+    date: m.utcDate,
+    status: m.status,
+    competition: m.competition?.name,
+    competitionCode: m.competition?.code,
+    homeTeam: {
+      id: m.homeTeam?.id,
+      name: m.homeTeam?.name,
+      crest: m.homeTeam?.crest
+    },
+    awayTeam: {
+      id: m.awayTeam?.id,
+      name: m.awayTeam?.name,
+      crest: m.awayTeam?.crest
+    },
+    score: m.score
+  }));
 }
 
 // ACCUEIL
@@ -37,107 +85,148 @@ app.get("/api/status", (req, res) => {
     application: "DRABO73 VIP PRONOS",
     football_api_configured: Boolean(API_KEY),
     api_connection: API_KEY ? "CONFIGURED" : "NOT_CONFIGURED",
-    date: getBurkinaDate()
+    date: burkinaDate()
   });
 });
 
-// MATCHS REELS
-app.get("/api/matches", async (req, res) => {
+// MATCHS DU JOUR
+app.get("/api/matches/today", async (req, res) => {
   try {
-    if (!API_KEY) {
-      return res.status(503).json({
-        status: "ERROR",
-        message: "Jeton football-data.org non configuré"
-      });
-    }
-
-    const dateFrom = getBurkinaDate();
-    const future = new Date();
-    future.setDate(future.getDate() + 6);
-
-    const dateTo = new Intl.DateTimeFormat("en-CA", {
-      timeZone: "Africa/Ouagadougou",
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit"
-    }).format(future);
-
-    const response = await fetch(
-      `${FOOTBALL_API}/matches?dateFrom=${dateFrom}&dateTo=${dateTo}`,
-      {
-        headers: {
-          "X-Auth-Token": API_KEY
-        }
-      }
-    );
-
-    const data = await response.json();
-
-    if (!response.ok) {
-      return res.status(response.status).json({
-        status: "ERROR",
-        message: "Erreur football-data.org",
-        details: data.message || "Erreur API"
-      });
-    }
-
-    const matches = (data.matches || []).map(match => ({
-      id: match.id,
-      utcDate: match.utcDate,
-      status: match.status,
-      matchday: match.matchday,
-      competition: {
-        id: match.competition?.id,
-        name: match.competition?.name,
-        code: match.competition?.code,
-        emblem: match.competition?.emblem
-      },
-      homeTeam: {
-        id: match.homeTeam?.id,
-        name: match.homeTeam?.name,
-        crest: match.homeTeam?.crest
-      },
-      awayTeam: {
-        id: match.awayTeam?.id,
-        name: match.awayTeam?.name,
-        crest: match.awayTeam?.crest
-      },
-      score: match.score
-    }));
+    const today = burkinaDate();
+    const matches = await getMatches(today, today);
 
     res.json({
       status: "OK",
       application: "DRABO73 VIP PRONOS",
-      api_connection: "CONNECTED",
-      dateFrom,
-      dateTo,
+      category: "MATCHS DU JOUR",
+      date: today,
       totalMatches: matches.length,
       message: matches.length
-        ? "Rencontres réelles récupérées"
-        : "Aucune rencontre disponible pour cette période",
-      matches
+        ? "Matchs réels du jour récupérés"
+        : "Aucun match disponible aujourd'hui",
+      matches: formatMatches(matches)
     });
-
   } catch (error) {
     res.status(500).json({
       status: "ERROR",
-      message: "Échec de connexion au serveur football",
-      details: error.message
+      message: error.message
     });
   }
+});
+
+// MATCHS DES 7 PROCHAINS JOURS
+app.get("/api/matches", async (req, res) => {
+  try {
+    const from = burkinaDate();
+    const to = addDays(new Date(), 6);
+    const matches = await getMatches(from, to);
+
+    res.json({
+      status: "OK",
+      application: "DRABO73 VIP PRONOS",
+      dateFrom: from,
+      dateTo: to,
+      totalMatches: matches.length,
+      message: "Rencontres réelles récupérées",
+      matches: formatMatches(matches)
+    });
+  } catch (error) {
+    res.status(500).json({
+      status: "ERROR",
+      message: error.message
+    });
+  }
+});
+
+// ANALYSES DES MATCHS
+app.get("/api/analyses", async (req, res) => {
+  try {
+    const today = burkinaDate();
+    const matches = await getMatches(today, addDays(new Date(), 6));
+
+    res.json({
+      status: "OK",
+      message: "Rencontres disponibles pour analyse",
+      totalMatches: matches.length,
+      analyses: formatMatches(matches).map(m => ({
+        matchId: m.id,
+        competition: m.competition,
+        homeTeam: m.homeTeam,
+        awayTeam: m.awayTeam,
+        matchDate: m.date,
+        status: m.status,
+        score: m.score,
+        analysisStatus: "DONNEES A ANALYSER",
+        prediction: null,
+        confidence: null
+      }))
+    });
+  } catch (error) {
+    res.status(500).json({
+      status: "ERROR",
+      message: error.message
+    });
+  }
+});
+
+// PRONOSTICS VIP
+app.get("/api/vip/predictions", (req, res) => {
+  res.json({
+    status: "OK",
+    application: "DRABO73 VIP PRONOS",
+    message: "Espace pronostics VIP",
+    predictions: [],
+    note: "Aucun pronostic automatique inventé."
+  });
 });
 
 // FORMULES VIP
 app.get("/api/vip/plans", (req, res) => {
   res.json({
     status: "OK",
-    application: "DRABO73 VIP PRONOS",
     currency: "FCFA",
     plans: [
       { duration: "7 jours", price: 5000 },
       { duration: "30 jours", price: 15000 },
       { duration: "90 jours", price: 35000 }
     ]
+  });
+});
+
+// HISTORIQUE DES RESULTATS
+app.get("/api/history", async (req, res) => {
+  try {
+    const from = addDays(new Date(), -7);
+    const to = burkinaDate();
+
+    const matches = await getMatches(from, to);
+
+    const finished = matches.filter(m =>
+      ["FINISHED", "AWARDED"].includes(m.status)
+    );
+
+    res.json({
+      status: "OK",
+      category: "HISTORIQUE DES RESULTATS",
+      totalMatches: finished.length,
+      results: formatMatches(finished)
+    });
+  } catch (error) {
+    res.status(500).json({
+      status: "ERROR",
+      message: error.message
+    });
+  }
+});
+
+// PARAMETRES
+app.get("/api/settings", (req, res) => {
+  res.json({
+    application: "DRABO73 VIP PRONOS",
+    slogan: "LA CONFIANCE RESTE",
+    timezone: "Africa/Ouagadougou",
+    currency: "FCFA",
+    apiConfigured: Boolean(API_KEY)
   });
 });
 
@@ -150,7 +239,7 @@ app.use((req, res) => {
   });
 });
 
-// DÉMARRAGE
+// DEMARRAGE
 app.listen(PORT, () => {
   console.log(
     `DRABO73 VIP PRONOS actif sur le port ${PORT}`
