@@ -1,0 +1,14 @@
+
+{
+  "background_color": "#000000",
+  "dir": "ltr",
+  "display": "standalone",
+  "name": "DRABO73 VIP PRONOS",
+  "orientation": "any",
+  "scope": "/",
+  "short_name": "DRABO73",
+  "start_url": "/",
+  "theme_color": "#d4af37",
+  "description": "Pronostics football, analyses des matchs et conseils VIP. LA CONFIANCE RESTE.",
+  "id": "/"
+}
