@@ -1,11 +1,15 @@
 
 const express = require("express");
 const cors = require("cors");
+const path = require("path");
 
 const app = express();
 
 app.use(cors());
 app.use(express.json({ limit: "100kb" }));
+
+// Servir les fichiers de l'application
+app.use(express.static(__dirname));
 
 const PORT = process.env.PORT || 3000;
 const API_KEY = process.env.FOOTBALL_DATA_API_KEY;
@@ -52,7 +56,6 @@ function validatePeriod(from, to) {
 
   const start = Date.parse(from + "T00:00:00Z");
   const end = Date.parse(to + "T00:00:00Z");
-
   const days = (end - start) / 86400000;
 
   return days >= 0 && days <= 9;
@@ -76,7 +79,7 @@ async function getCached(key, callback, duration = CACHE_DURATION) {
   return data;
 }
 
-// FOOTBALL DATA API
+// CONNEXION FOOTBALL-DATA.ORG
 async function footballRequest(endpoint) {
   if (!API_KEY) {
     throw new Error(
@@ -108,7 +111,7 @@ async function footballRequest(endpoint) {
 
     if (response.status === 429) {
       throw new Error(
-        "Limite API atteinte. Attends avant de réessayer."
+        "Limite API atteinte. Réessaie plus tard."
       );
     }
 
@@ -120,17 +123,17 @@ async function footballRequest(endpoint) {
   return data;
 }
 
-// EXTRACTION DES SCORES
+// SCORES RÉELS
 function getScore(match) {
   const score = match.score?.fullTime || {};
 
   return {
-    home: score.home ?? score.homeTeam ?? null,
-    away: score.away ?? score.awayTeam ?? null
+    home: score.home ?? null,
+    away: score.away ?? null
   };
 }
 
-// STATISTIQUES DES DERNIERS MATCHS
+// STATISTIQUES DES 10 DERNIERS MATCHS
 function calculateTeamStats(matches, teamId) {
   const finished = (matches || []).filter(match =>
     match.status === "FINISHED"
@@ -172,12 +175,12 @@ function calculateTeamStats(matches, teamId) {
     averageScored: played ? goalsFor / played : null,
     averageConceded: played ? goalsAgainst / played : null,
     form: played
-      ? Math.round((wins * 3 + draws) / (played * 3) * 100)
+      ? Number(((wins * 3 + draws) / (played * 3) * 100).toFixed(1))
       : null
   };
 }
 
-// MODÈLE DE POISSON POUR LES SCORES
+// MODÈLE DE POISSON
 function factorial(n) {
   let result = 1;
 
@@ -201,7 +204,9 @@ function generatePrediction(homeStats, awayStats) {
     !homeStats.played ||
     !awayStats.played ||
     homeStats.averageScored === null ||
-    awayStats.averageScored === null
+    awayStats.averageScored === null ||
+    homeStats.averageConceded === null ||
+    awayStats.averageConceded === null
   ) {
     return {
       available: false,
@@ -209,7 +214,6 @@ function generatePrediction(homeStats, awayStats) {
     };
   }
 
-  // Estimation des buts à partir des résultats passés
   const homeGoals = Math.max(0.2, Math.min(3.5,
     (homeStats.averageScored + awayStats.averageConceded) / 2
   ));
@@ -246,10 +250,8 @@ function generatePrediction(homeStats, awayStats) {
   draw /= total;
   awayWin /= total;
 
-  const doubleChance = {
-    "1X": homeWin + draw,
-    "X2": awayWin + draw
-  };
+  const chance1X = homeWin + draw;
+  const chanceX2 = awayWin + draw;
 
   const sortedScores = scores.sort(
     (a, b) => b.probability - a.probability
@@ -263,33 +265,41 @@ function generatePrediction(homeStats, awayStats) {
 
   return {
     available: true,
+
     expectedGoals: {
       home: Number(homeGoals.toFixed(2)),
       away: Number(awayGoals.toFixed(2))
     },
+
     probabilities: {
       homeWin: Number((homeWin * 100).toFixed(1)),
       draw: Number((draw * 100).toFixed(1)),
       awayWin: Number((awayWin * 100).toFixed(1))
     },
+
     doubleChance: {
-      "1X": Number((doubleChance["1X"] * 100).toFixed(1)),
-      "X2": Number((doubleChance["X2"] * 100).toFixed(1))
+      "1X": Number((chance1X * 100).toFixed(1)),
+      "X2": Number((chanceX2 * 100).toFixed(1))
     },
-    safestDoubleChance:
-      doubleChance["1X"] >= doubleChance["X2"] ? "1X" : "X2",
+
+    safestDoubleChance: chance1X >= chanceX2 ? "1X" : "X2",
+
     mainPrediction: outcome[0].name,
+
     exactScores: sortedScores.slice(0, 3).map(item => ({
       score: item.score,
       probability: Number((item.probability * 100).toFixed(1))
     })),
+
     confidence: Number((outcome[0].probability * 100).toFixed(1)),
-    model: "Poisson basé sur les dix derniers matchs",
+
+    model: "Poisson basé sur les derniers matchs disponibles",
+
     warning: "Probabilités estimatives, sans garantie."
   };
 }
 
-// RÉCUPÉRATION DES MATCHS RÉELS
+// MATCHS RÉELS
 async function getMatches(dateFrom, dateTo, competition = "") {
   const key = `matches_${dateFrom}_${dateTo}_${competition}`;
 
@@ -307,7 +317,7 @@ async function getMatches(dateFrom, dateTo, competition = "") {
   });
 }
 
-// HISTORIQUE RÉCENT D'UNE ÉQUIPE
+// HISTORIQUE D'UNE ÉQUIPE
 async function getTeamHistory(teamId) {
   return getCached(
     `team_history_${teamId}`,
@@ -322,7 +332,7 @@ async function getTeamHistory(teamId) {
   );
 }
 
-// ANALYSE COMPLÈTE D'UN MATCH
+// ANALYSE COMPLÈTE
 async function analyzeMatch(matchId) {
   const match = await getCached(
     `match_${matchId}`,
@@ -348,6 +358,7 @@ async function analyzeMatch(matchId) {
 
   return {
     status: "OK",
+
     match: {
       id: match.id,
       date: match.utcDate,
@@ -358,15 +369,18 @@ async function analyzeMatch(matchId) {
       awayTeam: match.awayTeam,
       score: getScore(match)
     },
+
     analysis: {
       home: {
         team: match.homeTeam.name,
         statistics: homeStats
       },
+
       away: {
         team: match.awayTeam.name,
         statistics: awayStats
       },
+
       comparison: {
         attack:
           homeStats.averageScored === null ||
@@ -376,6 +390,7 @@ async function analyzeMatch(matchId) {
               awayStats.averageScored
               ? match.homeTeam.name
               : match.awayTeam.name,
+
         defense:
           homeStats.averageConceded === null ||
           awayStats.averageConceded === null
@@ -386,32 +401,29 @@ async function analyzeMatch(matchId) {
               : match.awayTeam.name
       }
     },
+
     lineups: {
       home: match.homeTeam?.lineup || [],
       away: match.awayTeam?.lineup || [],
       homeFormation: match.homeTeam?.formation || null,
       awayFormation: match.awayTeam?.formation || null,
+
       available: Boolean(
         match.homeTeam?.lineup?.length ||
         match.awayTeam?.lineup?.length
       )
     },
+
     predictions: prediction
   };
 }
 
-// ACCUEIL
+// ACCUEIL : AFFICHER L'APPLICATION
 app.get("/", (req, res) => {
-  res.json({
-    application: "DRABO73 VIP PRONOS",
-    slogan: "LA CONFIANCE RESTE",
-    status: "Serveur actif",
-    date: getBurkinaDate(),
-    version: "2.0"
-  });
+  res.sendFile(path.join(__dirname, "index.html"));
 });
 
-// STATUT
+// STATUT DU SERVEUR ET DE L'API
 app.get("/api/status", async (req, res) => {
   const result = {
     application: "DRABO73 VIP PRONOS",
@@ -424,7 +436,7 @@ app.get("/api/status", async (req, res) => {
     return res.status(503).json({
       ...result,
       status: "ERROR",
-      message: "Jeton API absent."
+      message: "Jeton API absent dans Render."
     });
   }
 
@@ -482,6 +494,7 @@ app.get("/api/matches", async (req, res) => {
   } catch (error) {
     res.status(502).json({
       status: "ERROR",
+      api_connection: "ERROR",
       message: error.message
     });
   }
@@ -529,6 +542,7 @@ app.get("/api/analysis/:id", async (req, res) => {
     }
 
     const analysis = await analyzeMatch(id);
+
     res.json(analysis);
   } catch (error) {
     res.status(502).json({
@@ -664,7 +678,7 @@ app.get("/api/history", async (req, res) => {
   }
 });
 
-// ERREURS
+// ROUTE INCONNUE
 app.use((req, res) => {
   res.status(404).json({
     status: "ERROR",
@@ -672,7 +686,7 @@ app.use((req, res) => {
   });
 });
 
-// DÉMARRAGE
+// DÉMARRAGE DU SERVEUR
 app.listen(PORT, () => {
   console.log(
     `DRABO73 VIP PRONOS actif sur le port ${PORT}`
