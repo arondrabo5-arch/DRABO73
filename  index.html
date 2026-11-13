@@ -1,255 +1,70 @@
 
-<!DOCTYPE html>
-<html lang="fr">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="theme-color" content="#080808">
-  <meta name="description" content="DRABO73 VIP PRONOS - Analyses et pronostics football.">
-  <title>DRABO73 VIP PRONOS</title>
-  <link rel="manifest" href="/manifest.json">
-  <style>
-    *{box-sizing:border-box}
-    body{
-      margin:0;background:#080808;color:#fff;
-      font-family:Arial,sans-serif
-    }
-    header{
-      text-align:center;padding:22px 10px;
-      background:#111;border-bottom:2px solid #d4af37
-    }
-    header h1{color:#d4af37;margin:0;font-size:25px}
-    header p{color:#ddd;letter-spacing:3px}
-    nav{
-      display:flex;overflow-x:auto;gap:8px;
-      padding:12px;background:#151515
-    }
-    nav button{
-      white-space:nowrap;background:#222;
-      color:#d4af37;border:1px solid #b89632;
-      padding:10px;border-radius:8px
-    }
-    main{padding:15px;max-width:850px;margin:auto}
-    .card{
-      background:#151515;border:1px solid #80651d;
-      border-radius:12px;padding:16px;margin:14px 0
-    }
-    h2,h3{color:#d4af37}
-    .gold{color:#d4af37}
-    .button{
-      background:#d4af37;color:#080808;
-      border:0;padding:12px 18px;
-      border-radius:8px;font-weight:bold
-    }
-    .status{color:#49d17d}
-    .muted{color:#aaa}
-    .match{
-      border-bottom:1px solid #444;
-      padding:12px 0
-    }
-    .hidden{display:none}
-    footer{text-align:center;color:#888;padding:25px}
-  </style>
-</head>
-<body>
-
-<header>
-  <h1>DRABO73 VIP PRONOS</h1>
-  <p>LA CONFIANCE RESTE</p>
-  <small>ANALYSE • DISCIPLINE • PRUDENCE</small>
-</header>
-
-<nav>
-  <button onclick="showPage('accueil')">Accueil</button>
-  <button onclick="showPage('matchs')">Matchs du jour</button>
-  <button onclick="showPage('analyses')">Analyses</button>
-  <button onclick="showPage('vip')">Pronostics VIP</button>
-  <button onclick="showPage('historique')">Historique</button>
-  <button onclick="showPage('parametres')">Paramètres</button>
-</nav>
-
-<main>
-
-<section id="accueil">
-  <div class="card">
-    <h2>Bienvenue au CLUB VIP</h2>
-    <p>DRABO73 VIP PRONOS</p>
-    <p class="gold">LA CONFIANCE RESTE</p>
-    <p>Des analyses football basées sur les données disponibles.</p>
-    <p>Connexion Render : <span id="serverStatus">Vérification...</span></p>
-    <button class="button" onclick="loadMatches()">Actualiser les matchs</button>
-  </div>
-  <div class="card">
-    <h3>Tableau de bord</h3>
-    <p>Matchs disponibles : <strong id="matchCount">0</strong></p>
-    <p>Mode : Analyse des données réelles</p>
-  </div>
-</section>
-
-<section id="matchs" class="hidden">
-  <div class="card">
-    <h2>⚽ MATCHS DU JOUR</h2>
-    <p class="muted">Données officielles football-data.org</p>
-    <div id="matchesList">Chargement des matchs...</div>
-    <button class="button" onclick="loadMatches()">Actualiser</button>
-  </div>
-</section>
-
-<section id="analyses" class="hidden">
-  <div class="card">
-    <h2>ANALYSES DES MATCHS</h2>
-    <p>Sélectionne un match dans la liste pour consulter les informations disponibles.</p>
-    <div id="analysisContent">Aucun match sélectionné.</div>
-  </div>
-</section>
-
-<section id="vip" class="hidden">
-  <div class="card">
-    <h2>PRONOSTICS VIP</h2>
-    <p>Accès aux analyses et sélections VIP.</p>
-    <p>7 jours : <strong class="gold">5 000 FCFA</strong></p>
-    <p>30 jours : <strong class="gold">15 000 FCFA</strong></p>
-    <p>90 jours : <strong class="gold">35 000 FCFA</strong></p>
-    <p class="muted">Paiement Orange Money ou Moov Money, validation par l'administrateur.</p>
-    <p>Aucun paiement n'est effectué automatiquement depuis cette page.</p>
-  </div>
-</section>
-
-<section id="historique" class="hidden">
-  <div class="card">
-    <h2>HISTORIQUE DES RÉSULTATS</h2>
-    <p>Les scores réels seront affichés lorsqu'ils seront fournis par l'API.</p>
-    <div id="historyContent">Aucun résultat chargé.</div>
-  </div>
-</section>
-
-<section id="parametres" class="hidden">
-  <div class="card">
-    <h2>PARAMÈTRES</h2>
-    <p>Serveur : DRABO73 Render</p>
-    <p id="apiStatus">API : Vérification...</p>
-    <button class="button" onclick="checkServer()">Tester la connexion</button>
-  </div>
-</section>
-
-</main>
-
-<footer>
-  DRABO73 VIP PRONOS © 2026
-  <p>18+ • Jouez avec prudence.</p>
-  Aucun pronostic n'est garanti à 100 %.
-</footer>
-
-<script>
-const API_BASE =
-"https://drabo73-vip-pronos-2026-bf.onrender.com";
-
-let matches = [];
-
-function showPage(page){
-  document.querySelectorAll("main section")
-    .forEach(section => section.classList.add("hidden"));
-  document.getElementById(page).classList.remove("hidden");
-}
-
-async function checkServer(){
-  const status = document.getElementById("serverStatus");
-  const api = document.getElementById("apiStatus");
-
-  try{
-    const response = await fetch(API_BASE + "/api/status");
-    if(!response.ok) throw new Error("Serveur indisponible");
-
-    status.textContent = "ACTIF";
-    status.className = "status";
-    api.textContent = "Serveur Render : ACTIF (200 OK)";
-  }catch(error){
-    status.textContent = "INDISPONIBLE";
-    status.className = "muted";
-    api.textContent = "Erreur : " + error.message;
-  }
-}
-
 async function loadMatches(){
   const list = document.getElementById("matchesList");
   list.textContent = "Chargement des rencontres...";
 
-  try{
-    const response = await fetch(API_BASE + "/api/matches");
+  try {
+    const response = await fetch(
+      API_BASE + "/api/matches/upcoming"
+    );
 
-    if(!response.ok){
+    if (!response.ok) {
       throw new Error("Erreur API : " + response.status);
     }
 
     const data = await response.json();
 
-    matches = Array.isArray(data)
-      ? data
-      : data.matches || data.matchesToday || [];
+    matches = Array.isArray(data.matches)
+      ? data.matches
+      : [];
 
     document.getElementById("matchCount").textContent =
       matches.length;
 
-    if(matches.length === 0){
-      list.textContent =
-        "Aucune rencontre disponible pour le moment.";
+    if (matches.length === 0) {
+      list.textContent = "Aucun match à venir disponible.";
       return;
     }
 
     list.innerHTML = "";
 
-    matches.forEach((match,index)=>{
-      const home = match.homeTeam?.name ||
-                   match.homeTeam || "Équipe domicile";
-      const away = match.awayTeam?.name ||
-                   match.awayTeam || "Équipe extérieure";
-
-      const date = match.utcDate
-        ? new Date(match.utcDate).toLocaleString("fr-FR")
-        : "Date non disponible";
-
+    matches.forEach((match, index) => {
       const item = document.createElement("div");
       item.className = "match";
 
       const title = document.createElement("h3");
-      title.textContent = home + " - " + away;
+      title.textContent =
+        (match.homeTeam?.name || "Domicile") +
+        " - " +
+        (match.awayTeam?.name || "Extérieur");
 
-      const info = document.createElement("p");
-      info.textContent = date;
+      const competition = document.createElement("p");
+      competition.textContent =
+        match.competition?.name || "Compétition non disponible";
+
+      const date = document.createElement("p");
+      date.textContent = match.utcDate
+        ? new Date(match.utcDate).toLocaleString("fr-FR", {
+            timeZone: "Africa/Ouagadougou",
+            dateStyle: "short",
+            timeStyle: "short"
+          })
+        : "Date non disponible";
+
+      const status = document.createElement("p");
+      status.textContent = "Statut : " + match.status;
 
       const button = document.createElement("button");
       button.className = "button";
       button.textContent = "Analyser";
-      button.onclick = ()=>showAnalysis(index);
+      button.onclick = () => showAnalysis(index);
 
-      item.append(title,info,button);
+      item.append(title, competition, date, status, button);
       list.appendChild(item);
     });
 
-  }catch(error){
+  } catch (error) {
     list.textContent =
       "Impossible de charger les matchs : " + error.message;
   }
 }
-
-function showAnalysis(index){
-  const match = matches[index];
-  if(!match) return;
-
-  const home = match.homeTeam?.name || match.homeTeam;
-  const away = match.awayTeam?.name || match.awayTeam;
-
-  const content = document.getElementById("analysisContent");
-  content.textContent =
-    home + " contre " + away +
-    ". Les statistiques détaillées doivent être fournies par une source officielle.";
-
-  showPage("analyses");
-}
-
-checkServer();
-loadMatches();
-</script>
-
-</body>
-</html>
