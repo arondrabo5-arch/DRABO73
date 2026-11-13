@@ -160,7 +160,8 @@ async function footballRequest(endpoint, req, res, options = {}) {
       url.searchParams.set("dateTo", lastDay);
     }
 
-    // PÉRIODE PERSONNALISÉE LIMITÉE À 10 JOURS
+    // PÉRIODE PERSONNALISÉE
+    // MAXIMUM 10 JOURS
     if (options.customPeriod) {
       const from = req.query.dateFrom || getBurkinaDate();
       const to = req.query.dateTo || from;
@@ -194,14 +195,16 @@ async function footballRequest(endpoint, req, res, options = {}) {
       signal: controller.signal
     });
 
-    const text = await response.text();
+    const responseText = await response.text();
 
     let body;
 
     try {
-      body = JSON.parse(text);
+      body = JSON.parse(responseText);
     } catch {
-      body = { message: text || "Réponse invalide de football-data.org." };
+      body = {
+        message: responseText || "Réponse invalide de football-data.org."
+      };
     }
 
     if (!response.ok) {
@@ -297,6 +300,32 @@ app.get("/api/matches", (req, res) => {
 app.get("/api/matches/upcoming", (req, res) => {
   return footballRequest("/matches", req, res, {
     upcoming: true
+  });
+});
+
+// ===============================
+// HISTORIQUE DES RÉSULTATS RÉELS
+// MAXIMUM 10 JOURS
+// ===============================
+
+app.get("/api/matches/history", (req, res) => {
+  const today = getBurkinaDate();
+
+  const dateFrom = req.query.dateFrom || addDays(today, -9);
+  const dateTo = req.query.dateTo || today;
+
+  const historyRequest = {
+    ...req,
+    query: {
+      ...req.query,
+      dateFrom,
+      dateTo,
+      status: "FINISHED"
+    }
+  };
+
+  return footballRequest("/matches", historyRequest, res, {
+    customPeriod: true
   });
 });
 
