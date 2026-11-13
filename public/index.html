@@ -1,145 +1,353 @@
 
-    if (!todayMatches.length) {
-      list.textContent = "Aucun match disponible aujourd'hui.";
-      return;
-    }
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#080808">
+<meta name="description" content="DRABO73 VIP PRONOS - Analyses et pronostics football">
+<title>DRABO73 VIP PRONOS</title>
 
-    todayMatches.forEach((match, index) => {
-      list.appendChild(createMatchCard(match, index));
-    });
-  } catch (error) {
-    list.textContent = "Erreur : " + error.message;
-  }
+<style>
+*{box-sizing:border-box}
+body{
+ margin:0;
+ background:#080808;
+ color:white;
+ font-family:Arial,sans-serif;
+}
+header{
+ background:#111;
+ border-bottom:2px solid #d4af37;
+ padding:22px 12px;
+ text-align:center;
+}
+header h1{
+ color:#d4af37;
+ margin:0;
+ font-size:25px;
+}
+header p{color:#ddd;margin:8px 0 0}
+nav{
+ display:flex;
+ flex-wrap:wrap;
+ justify-content:center;
+ background:#151515;
+ gap:7px;
+ padding:12px 5px;
+}
+nav button{
+ background:#242424;
+ border:1px solid #d4af37;
+ color:#d4af37;
+ padding:10px;
+ border-radius:7px;
+}
+main{padding:15px;max-width:850px;margin:auto}
+section{display:none}
+section.active{display:block}
+h2{color:#d4af37}
+.card{
+ background:#171717;
+ border:1px solid #8f7627;
+ border-radius:12px;
+ padding:15px;
+ margin:12px 0;
+}
+.team{
+ text-align:center;
+ font-weight:bold;
+ font-size:17px;
+ margin:12px 0;
+}
+.date,.small{color:#bbb;font-size:13px}
+.gold{color:#d4af37}
+.action{
+ background:#d4af37;
+ color:#111;
+ border:0;
+ border-radius:7px;
+ padding:11px 15px;
+ font-weight:bold;
+ margin-top:10px;
+}
+.secondary{
+ background:#252525;
+ color:#d4af37;
+ border:1px solid #d4af37;
+ border-radius:7px;
+ padding:10px;
+}
+.result{
+ color:#d4af37;
+ font-weight:bold;
+ font-size:18px;
+}
+input{
+ width:100%;
+ padding:12px;
+ background:#222;
+ color:white;
+ border:1px solid #d4af37;
+ border-radius:6px;
+ margin:8px 0;
+}
+footer{
+ text-align:center;
+ padding:20px;
+ color:#999;
+ border-top:1px solid #444;
+ margin-top:30px;
+}
+</style>
+</head>
+
+<body>
+
+<header>
+<h1>DRABO73 VIP PRONOS</h1>
+<p>LA CONFIANCE RESTE</p>
+<p class="small">ANALYSE • DISCIPLINE • PRUDENCE</p>
+</header>
+
+<nav>
+<button onclick="showPage('home')">Accueil</button>
+<button onclick="showPage('matches')">Matchs du jour</button>
+<button onclick="showPage('analysis')">Analyses</button>
+<button onclick="showPage('vip')">Pronostics VIP</button>
+<button onclick="showPage('history')">Historique</button>
+<button onclick="showPage('settings')">Paramètres</button>
+</nav>
+
+<main>
+
+<section id="home" class="active">
+<h2>Bienvenue</h2>
+<div class="card">
+<h3 class="gold">DRABO73 VIP PRONOS</h3>
+<p>Bienvenue dans ton espace de pronostics football.</p>
+<p>Des rencontres réelles, des analyses et des statistiques pour mieux comprendre les matchs.</p>
+<p class="gold">La confiance reste.</p>
+</div>
+<div class="card">
+<p>Matchs disponibles : <strong id="matchCount">0</strong></p>
+<p id="connectionStatus">Connexion au serveur...</p>
+<button class="action" onclick="loadMatches()">Actualiser les matchs</button>
+</div>
+</section>
+
+<section id="matches">
+<h2>Matchs du jour</h2>
+<p class="small">Rencontres fournies par football-data.org.</p>
+<div id="matchesList">Chargement des rencontres...</div>
+</section>
+
+<section id="analysis">
+<h2>Analyses des matchs</h2>
+<div id="analysisContent" class="card">
+Sélectionne un match pour consulter son analyse.
+</div>
+</section>
+
+<section id="vip">
+<h2>Pronostics VIP</h2>
+<div class="card">
+<h3 class="gold">Abonnements VIP</h3>
+<p>7 jours : 5 000 FCFA</p>
+<p>30 jours : 15 000 FCFA</p>
+<p>90 jours : 35 000 FCFA</p>
+<p>Contacte l'administration pour les modalités de paiement Orange Money ou Moov Money.</p>
+</div>
+<div class="card">
+<h3 class="gold">Accès VIP</h3>
+<input id="vipCode" type="text" placeholder="Entre ton code VIP">
+<button class="action" onclick="checkVIP()">Vérifier mon accès</button>
+<p id="vipMessage"></p>
+</div>
+</section>
+
+<section id="history">
+<h2>Historique des résultats</h2>
+<div id="historyList" class="card">
+Les résultats seront affichés lorsqu'ils seront disponibles sur le serveur.
+</div>
+</section>
+
+<section id="settings">
+<h2>Paramètres</h2>
+<div class="card">
+<p>Application : DRABO73 VIP PRONOS</p>
+<p>Serveur : Render</p>
+<p>Source des matchs : football-data.org</p>
+<p id="serverStatus">Vérification du serveur...</p>
+<button class="action" onclick="checkServer()">Tester la connexion</button>
+</div>
+</section>
+
+</main>
+
+<footer>
+<p>DRABO73 VIP PRONOS</p>
+<p>LA CONFIANCE RESTE</p>
+<p>18+ | Aucun pronostic n'est garanti à 100 %.</p>
+</footer>
+
+<script>
+const API_BASE =
+"https://drabo73-vip-pronos-2026-bf.onrender.com";
+
+let matches = [];
+
+function showPage(page){
+ document.querySelectorAll("main section")
+ .forEach(section=>section.classList.remove("active"));
+
+ const target=document.getElementById(page);
+ if(target) target.classList.add("active");
+
+ if(page==="matches") loadMatches();
+ if(page==="settings") checkServer();
 }
 
-function showAnalysis(index) {
-  const match = matches[index];
+async function checkServer(){
+ const status=document.getElementById("serverStatus");
+ const homeStatus=document.getElementById("connectionStatus");
 
-  if (!match) return;
+ try{
+  const response=await fetch(API_BASE+"/api/status");
+  if(!response.ok) throw new Error("HTTP "+response.status);
 
-  selectedMatch = match;
+  const data=await response.json();
 
-  const result = document.getElementById("analysisResult");
-  result.innerHTML = "";
-
-  const title = document.createElement("h3");
-  title.className = "gold";
-  title.textContent =
-    `${match.homeTeam?.name || "Domicile"} - ${match.awayTeam?.name || "Extérieur"}`;
-
-  const competition = document.createElement("p");
-  competition.textContent =
-    "Compétition : " + (match.competition?.name || "Non disponible");
-
-  const date = document.createElement("p");
-  date.textContent = "Date : " + formatDate(match.utcDate);
-
-  const status = document.createElement("p");
-  status.textContent = "Statut : " + (match.status || "Inconnu");
-
-  const warning = document.createElement("p");
-  warning.className = "muted";
-  warning.textContent =
-    "Les compositions, statistiques et probabilités ne sont pas fournies par cette route. Aucune prédiction n'est inventée.";
-
-  const details = document.createElement("button");
-  details.className = "button";
-  details.textContent = "Voir les détails du match";
-
-  details.onclick = async () => {
-    try {
-      const data = await apiGet("/api/matches/" + match.id);
-      const info = document.createElement("pre");
-      info.style.whiteSpace = "pre-wrap";
-      info.style.color = "#d6ad45";
-      info.textContent = JSON.stringify(data.match || data, null, 2);
-      result.appendChild(info);
-    } catch (error) {
-      alert("Erreur : " + error.message);
-    }
-  };
-
-  result.append(title, competition, date, status, warning, details);
-  showPage("analysis");
+  status.textContent="Serveur connecté.";
+  if(homeStatus) homeStatus.textContent="Serveur connecté.";
+ }catch(error){
+  status.textContent="Erreur de connexion : "+error.message;
+  if(homeStatus) homeStatus.textContent="Serveur indisponible.";
+ }
 }
 
-async function loadHistory() {
-  const list = document.getElementById("historyList");
-  list.textContent = "Chargement des résultats...";
+async function loadMatches(){
+ const list=document.getElementById("matchesList");
+ const count=document.getElementById("matchCount");
 
-  try {
-    const data = await apiGet("/api/matches?status=FINISHED");
+ list.textContent="Chargement des rencontres...";
 
-    const finished = (data.matches || []).filter(
-      match => match.status === "FINISHED"
-    );
-
-    list.innerHTML = "";
-
-    if (!finished.length) {
-      list.textContent = "Aucun résultat terminé disponible.";
-      return;
-    }
-
-    finished.forEach(match => {
-      const item = document.createElement("div");
-      item.className = "match";
-
-      const title = document.createElement("h3");
-      title.textContent =
-        `${match.homeTeam?.name || "Domicile"} - ${match.awayTeam?.name || "Extérieur"}`;
-
-      const score = document.createElement("p");
-      score.className = "result";
-
-      const goals = match.score?.fullTime;
-      score.textContent = goals
-        ? `${goals.home ?? "-"} - ${goals.away ?? "-"}`
-        : "Score non disponible";
-
-      item.append(title, score);
-      list.appendChild(item);
-    });
-  } catch (error) {
-    list.textContent = "Erreur : " + error.message;
-  }
-}
-
-function sendVipRequest() {
-  const name = document.getElementById("vipName").value.trim();
-  const phone = document.getElementById("vipPhone").value.trim();
-  const plan = document.getElementById("vipPlan").value;
-
-  if (!name || !phone) {
-    alert("Remplis ton nom et ton numéro de téléphone.");
-    return;
-  }
-
-  const message =
-    `Bonjour, je souhaite demander un abonnement DRABO73 VIP PRONOS.\nNom : ${name}\nTéléphone : ${phone}\nAbonnement : ${plan}`;
-
-  const whatsappNumber = "";
-
-  if (!whatsappNumber) {
-    alert("Le numéro WhatsApp de l'administrateur doit être configuré avant l'envoi.");
-    return;
-  }
-
-  window.open(
-    "https://wa.me/" + whatsappNumber +
-    "?text=" + encodeURIComponent(message),
-    "_blank"
+ try{
+  const response=await fetch(
+   API_BASE+"/api/matches/upcoming"
   );
+
+  if(!response.ok){
+   throw new Error("Erreur API : "+response.status);
+  }
+
+  const data=await response.json();
+
+  matches=Array.isArray(data.matches)
+   ? data.matches : [];
+
+  count.textContent=matches.length;
+  list.innerHTML="";
+
+  if(matches.length===0){
+   list.textContent="Aucun match disponible actuellement.";
+   return;
+  }
+
+  matches.forEach((match,index)=>{
+   list.appendChild(createMatchCard(match,index));
+  });
+
+ }catch(error){
+  list.textContent="Impossible de charger les matchs : "+error.message;
+ }
 }
 
-async function refreshAll() {
-  await Promise.all([
-    checkConnection(),
-    loadMatches(),
-    loadToday()
-  ]);
+function createMatchCard(match,index){
+ const card=document.createElement("div");
+ card.className="card";
+
+ const home=match.homeTeam?.name || "Équipe domicile";
+ const away=match.awayTeam?.name || "Équipe extérieure";
+
+ const date=match.utcDate
+ ? new Date(match.utcDate).toLocaleString("fr-FR")
+ : "Date non disponible";
+
+ const competition=match.competition?.name || "Compétition";
+
+ card.innerHTML=`
+  <p class="small">${escapeHTML(competition)}</p>
+  <p class="date">${escapeHTML(date)}</p>
+  <div class="team">
+   ${escapeHTML(home)}
+   <span class="gold"> VS </span>
+   ${escapeHTML(away)}
+  </div>
+  <p class="small">Statut : ${escapeHTML(match.status || "Inconnu")}</p>
+  <button class="action" data-index="${index}">
+   Voir l'analyse
+  </button>
+ `;
+
+ card.querySelector("button").addEventListener("click",()=>{
+  showAnalysis(index);
+ });
+
+ return card;
 }
 
-document.addEventListener("DOMContentLoaded", () => {
-  refreshAll();
-});
+function showAnalysis(index){
+ const match=matches[index];
+ if(!match)return;
+
+ const home=match.homeTeam?.name || "Équipe domicile";
+ const away=match.awayTeam?.name || "Équipe extérieure";
+
+ const analysis=document.getElementById("analysisContent");
+
+ analysis.innerHTML=`
+  <h3 class="gold">${escapeHTML(home)} VS ${escapeHTML(away)}</h3>
+  <p>Compétition : ${escapeHTML(match.competition?.name || "Non disponible")}</p>
+  <p>Date : ${escapeHTML(match.utcDate || "Non disponible")}</p>
+  <p>Statut : ${escapeHTML(match.status || "Inconnu")}</p>
+  <p>Score réel : ${match.score?.fullTime?.home ?? "-"} - ${match.score?.fullTime?.away ?? "-"}</p>
+  <hr>
+  <p class="gold">Analyse statistique</p>
+  <p>Les compositions, statistiques et données historiques ne sont affichées que si elles sont disponibles auprès de la source.</p>
+  <p>Aucun score exact ou taux de réussite n'est inventé.</p>
+ `;
+
+ showPage("analysis");
+}
+
+function escapeHTML(value){
+ return String(value).replace(/[&<>"']/g,char=>({
+  "&":"&amp;",
+  "<":"&lt;",
+  ">":"&gt;",
+  '"':"&quot;",
+  "'":"&#39;"
+ }[char]));
+}
+
+function checkVIP(){
+ const code=document.getElementById("vipCode").value.trim();
+ const message=document.getElementById("vipMessage");
+
+ if(!code){
+  message.textContent="Entre ton code VIP.";
+  return;
+ }
+
+ message.textContent=
+ "Validation administrative nécessaire. Contacte l'administration.";
+}
+
+checkServer();
+loadMatches();
+</script>
+
+</body>
+</html>
