@@ -1,3 +1,4 @@
+
 import express from "express";
 import path from "path";
 import fs from "fs";
@@ -8,16 +9,33 @@ dotenv.config();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const FOOTBALL_DATA_BASE_URL = "https://football-data.org";
+
+// Adresse officielle de l'API football-data.org v4
+const FOOTBALL_DATA_BASE_URL =
+  "https://api.football-data.org/v4";
+
+const app = express();
+const PORT = Number(process.env.PORT) || 3000;
 
 function sanitizeToken(raw) {
   if (!raw || typeof raw !== "string") return undefined;
-  const cleaned = raw.trim().replace(/^['"]+|['"]+$/g, "").trim();
+
+  const cleaned = raw
+    .trim()
+    .replace(/^['"]+|['"]+$/g, "")
+    .trim();
+
   if (!cleaned) return undefined;
-  const lower = cleaned.toLowerCase();
-  if (["undefined", "null", "your_football_data_api_key", "my_football_data_api_key"].includes(lower)) {
+
+  if ([
+    "undefined",
+    "null",
+    "your_football_data_api_key",
+    "my_football_data_api_key"
+  ].includes(cleaned.toLowerCase())) {
     return undefined;
   }
+
   return cleaned;
 }
 
@@ -27,161 +45,339 @@ function getApiToken(req) {
     sanitizeToken(process.env.FOOTBALL_DATA_API_TOKEN) ||
     sanitizeToken(process.env.FOOTBALL_DATA_TOKEN) ||
     sanitizeToken(process.env.X_AUTH_TOKEN);
+
   if (envToken) return envToken;
 
-  const customHeader = req?.headers["x-auth-token"];
-  if (typeof customHeader === "string") return sanitizeToken(customHeader);
-  return undefined;
+  const header = req?.headers?.["x-auth-token"];
+
+  return typeof header === "string"
+    ? sanitizeToken(header)
+    : undefined;
 }
 
-function getTodayAndTomorrowDates() {
-  const now = new Date();
-  const today = now.toISOString().split("T")[0];
-  const tomorrowDate = new Date(now.getTime() + 24 * 60 * 60 * 1000);
-  const tomorrow = tomorrowDate.toISOString().split("T")[0];
-  return { today, tomorrow };
+// Date locale du Burkina Faso
+function getBurkinaDate() {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Africa/Ouagadougou",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit"
+  }).format(new Date());
 }
 
-async function proxyToFootballData(targetPath, req, res, forceTodayMatches = false) {
+async function proxyToFootballData(
+  targetPath,
+  req,
+  res,
+  forceTodayMatches = false
+) {
   const token = getApiToken(req);
+
   if (!token) {
     return res.status(503).json({
       status: "ERROR",
       error: "FOOTBALL_DATA_API_KEY_MISSING",
-      message: "La clé FOOTBALL_DATA_API_KEY est manquante sur Render (Environment)."
+      message: "Clé API manquante sur Render."
     });
   }
-
-  const queryParams = new URLSearchParams();
-  for (const [key, value] of Object.entries(req.query)) {
-    if (typeof value === "string") queryParams.append(key, value);
-  }
-
-  // Force les matchs du jour exact si aucune date n'est fournie par l'APK
-  if (forceTodayMatches && !queryParams.has("date") && !queryParams.has("dateFrom")) {
-    const { today } = getTodayAndTomorrowDates();
-    queryParams.append("dateFrom", today);
-    queryParams.append("dateTo", today);
-  }
-
-  const queryString = queryParams.toString();
-  const url = `${FOOTBALL_DATA_BASE_URL}${targetPath}${queryString ? `?${queryString}` : ""}`;
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 15000);
 
   try {
-    const upstreamResponse = await fetch(url, {
-      method: req.method,
-      headers: {
-        "X-Auth-Token": token,
-        Accept: "application/json"
-      },
-      signal: controller.signal
-    });
+    const url = new URL(
+      `${FOOTBALL_DATA_BASE_URL}${targetPath}`
+    );
 
-    const responseStatus = upstreamResponse.status;
-    const data = await upstreamResponse.json();
+    // Transmettre les paramètres de recherche
+    for (const [key, value] of Object.entries(req.query || {})) {
+      if (
+        typeof value === "string" ||
+        typeof value === "number"
+      ) {
+        url.searchParams.set(key, String(value));
+      }
+    }
 
-    if (upstreamResponse.ok && data && typeof data === "object") {
-      return res.status(responseStatus).json({
-        status: "OK",
+    // Matchs du jour au Burkina Faso
+    if (
+      forceTodayMatches &&
+      !url.searchParams.has("date") &&
+      !url.searchParams.has("dateFrom") &&
+      !url.searchParams.has("dateTo")
+    ) {
+      const today = getBurkinaDate();
+
+      url.searchParams.set("dateFrom", today);
+      url.searchParams.set("dateTo", today);
+    }
+
+    const controller = new AbortController();
+
+    const timer = setTimeout(
+      () => controller.abort(),
+      15000
+    );
+
+    let upstreamResponse;
+
+    try {
+      upstreamResponse = await fetch(url.toString(), {
+        method: "GET",
+        headers: {
+          "X-Auth-Token": token,
+          "Accept": "application/json"
+        },
+        signal: controller.signal
+      });
+    } finally {
+      clearTimeout(timer);
+    }
+
+    const responseText = await upstreamResponse.text();
+
+    let data;
+
+    try {
+      data = responseText
+        ? JSON.parse(responseText)
+        : {};
+    } catch {
+      data = { rawResponse: responseText };
+    }
+
+    if (!upstreamResponse.ok) {
+      return res.status(upstreamResponse.status).json({
+        status: "ERROR",
         application: "DRABO73 VIP PRONOS",
-        api_connection: "CONNECTED",
-        serverDate: getTodayAndTomorrowDates().today,
-        totalMatches: Array.isArray(data.matches) ? data.matches.length : 0,
-        ...data
+        api_connection: "ERROR",
+        httpStatus: upstreamResponse.status,
+        message:
+          data.message ||
+          "Erreur retournée par football-data.org.",
+        details: data
       });
     }
 
-    return res.status(responseStatus).json({
-      status: "ERROR",
-      httpStatus: responseStatus,
-      ...data
+    return res.status(200).json({
+      ...data,
+      status: "OK",
+      application: "DRABO73 VIP PRONOS",
+      api_connection: "CONNECTED",
+      serverDate: getBurkinaDate(),
+      totalMatches: Array.isArray(data.matches)
+        ? data.matches.length
+        : 0,
+      totalCompetitions: Array.isArray(data.competitions)
+        ? data.competitions.length
+        : 0
     });
+
   } catch (error) {
+    const timeout = error.name === "AbortError";
+
     return res.status(502).json({
       status: "ERROR",
-      message: "Erreur de connexion entre Render et football-data.org.",
+      application: "DRABO73 VIP PRONOS",
+      message: timeout
+        ? "Délai de connexion dépassé."
+        : "Erreur de connexion à football-data.org.",
       details: error.message
     });
-  } finally {
-    clearTimeout(timer);
   }
 }
 
-const app = express();
-const PORT = parseInt(process.env.PORT || "3000", 10);
-
 app.use(express.json());
+
 app.use((req, res, next) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, X-Auth-Token, Authorization");
-  res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
-  if (req.method === "OPTIONS") return res.sendStatus(204);
+  res.setHeader(
+    "Access-Control-Allow-Methods",
+    "GET, POST, OPTIONS"
+  );
+  res.setHeader(
+    "Access-Control-Allow-Headers",
+    "Content-Type, X-Auth-Token, Authorization"
+  );
+  res.setHeader("Cache-Control", "no-store");
+
+  if (req.method === "OPTIONS") {
+    return res.sendStatus(204);
+  }
+
   next();
 });
 
+// Vérification du serveur
 app.get("/health", (_req, res) => {
-  res.status(200).json({
+  res.json({
     status: "OK",
     application: "DRABO73 VIP PRONOS",
-    date: getTodayAndTomorrowDates().today
+    date: getBurkinaDate()
   });
 });
 
-app.get("/api/status", (_req, res) => {
-  const token = getApiToken();
-  res.status(200).json({
+// Vérification de la configuration API
+app.get("/api/status", (req, res) => {
+  const token = getApiToken(req);
+
+  res.json({
     status: "OK",
-    api_connection: token ? "CONNECTED" : "NOT_CONFIGURED",
+    application: "DRABO73 VIP PRONOS",
+    api_connection: token
+      ? "CONNECTED"
+      : "NOT_CONFIGURED",
     tokenConfigured: Boolean(token),
-    serverDate: getTodayAndTomorrowDates().today
+    serverDate: getBurkinaDate()
   });
 });
 
-// Route principale des matchs du jour utilisée par votre APK
-app.get("/api/matches", (req, res) => proxyToFootballData("/matches", req, res, true));
+// Matchs du jour
+app.get("/api/matches", (req, res) =>
+  proxyToFootballData("/matches", req, res, true)
+);
 
-app.get("/api/matches/:id/head2head", (req, res) => {
-  const cleanId = String(req.params.id || "").replace(/^fd-/i, "").trim();
-  proxyToFootballData(`/matches/${cleanId}/head2head`, req, res);
-});
-
+// Détails d'un match
 app.get("/api/matches/:id", (req, res) => {
-  const cleanId = String(req.params.id || "").replace(/^fd-/i, "").trim();
-  proxyToFootballData(`/matches/${cleanId}`, req, res);
+  const id = String(req.params.id || "")
+    .replace(/^fd-/i, "");
+
+  if (!/^\d+$/.test(id)) {
+    return res.status(400).json({
+      status: "ERROR",
+      message: "Identifiant de match invalide."
+    });
+  }
+
+  return proxyToFootballData(
+    `/matches/${id}`,
+    req,
+    res
+  );
 });
 
-app.get("/api/competitions", (req, res) => proxyToFootballData("/competitions", req, res));
-app.get("/api/competitions/:id/matches", (req, res) =>
-  proxyToFootballData(`/competitions/${req.params.id}/matches`, req, res)
-);
-app.get("/api/competitions/:id/standings", (req, res) =>
-  proxyToFootballData(`/competitions/${req.params.id}/standings`, req, res)
-);
+// Confrontations directes
+app.get("/api/matches/:id/head2head", (req, res) => {
+  const id = String(req.params.id || "")
+    .replace(/^fd-/i, "");
 
-app.all("/api/football/*", (req, res) => {
-  const subPath = req.path
-    .replace(/^\/api\/football/, "")
-    .replace(/\/matches\/fd-(\d+)/i, "/matches/$1");
-  proxyToFootballData(subPath, req, res, subPath === "/matches");
+  if (!/^\d+$/.test(id)) {
+    return res.status(400).json({
+      status: "ERROR",
+      message: "Identifiant de match invalide."
+    });
+  }
+
+  return proxyToFootballData(
+    `/matches/${id}/head2head`,
+    req,
+    res
+  );
 });
 
+// Liste des compétitions
+app.get("/api/competitions", (req, res) =>
+  proxyToFootballData("/competitions", req, res)
+);
+
+// Matchs d'une compétition (PL, CL, FL1, BL1...)
+app.get("/api/competitions/:id/matches", (req, res) => {
+  const id = String(req.params.id || "");
+
+  if (!/^[A-Za-z0-9_-]+$/.test(id)) {
+    return res.status(400).json({
+      status: "ERROR",
+      message: "Code de compétition invalide."
+    });
+  }
+
+  return proxyToFootballData(
+    `/competitions/${id}/matches`,
+    req,
+    res
+  );
+});
+
+// Classement d'une compétition
+app.get("/api/competitions/:id/standings", (req, res) => {
+  const id = String(req.params.id || "");
+
+  if (!/^[A-Za-z0-9_-]+$/.test(id)) {
+    return res.status(400).json({
+      status: "ERROR",
+      message: "Code de compétition invalide."
+    });
+  }
+
+  return proxyToFootballData(
+    `/competitions/${id}/standings`,
+    req,
+    res
+  );
+});
+
+// Compatibilité avec les anciennes routes de l'APK
+app.use("/api/football", (req, res) => {
+  const subPath = req.path.replace(
+    /\/matches\/fd-(\d+)/i,
+    "/matches/$1"
+  );
+
+  if (!subPath.startsWith("/")) {
+    return res.status(400).json({
+      status: "ERROR",
+      message: "Route API invalide."
+    });
+  }
+
+  return proxyToFootballData(
+    subPath,
+    req,
+    res,
+    subPath === "/matches"
+  );
+});
+
+// Route API inconnue
+app.use("/api", (_req, res) => {
+  res.status(404).json({
+    status: "ERROR",
+    message: "Route API introuvable."
+  });
+});
+
+// Fichiers du site
 app.use(express.static(path.join(__dirname, "public")));
+
 if (fs.existsSync(path.join(__dirname, "dist"))) {
   app.use(express.static(path.join(__dirname, "dist")));
 }
+
 app.use(express.static(__dirname));
 
+// Page principale
 app.get("*", (_req, res) => {
-  const distIndex = path.join(__dirname, "dist", "index.html");
-  const rootIndex = path.join(__dirname, "index.html");
-  if (fs.existsSync(distIndex)) return res.sendFile(distIndex);
-  if (fs.existsSync(rootIndex)) return res.sendFile(rootIndex);
-  res.status(404).send("index.html introuvable.");
+  const distIndex = path.join(
+    __dirname,
+    "dist",
+    "index.html"
+  );
+
+  const rootIndex = path.join(
+    __dirname,
+    "index.html"
+  );
+
+  if (fs.existsSync(distIndex)) {
+    return res.sendFile(distIndex);
+  }
+
+  if (fs.existsSync(rootIndex)) {
+    return res.sendFile(rootIndex);
+  }
+
+  return res.status(404).send("index.html introuvable.");
 });
 
 app.listen(PORT, "0.0.0.0", () => {
-  console.log(`[DRABO73 VIP PRONOS] Serveur connecté sur le port ${PORT}`);
+  console.log(
+    `[DRABO73 VIP PRONOS] Serveur actif sur le port ${PORT}`
+  );
 });
