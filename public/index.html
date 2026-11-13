@@ -29,9 +29,14 @@ input{width:100%;padding:12px;background:#222;color:white;border:1px solid #d4af
 footer{text-align:center;padding:20px;color:#999;border-top:1px solid #444;margin-top:30px}
 .error{color:#ff7777}
 .success{color:#70d890}
+.muted{color:#aaa}
+.stat{display:flex;justify-content:space-between;gap:10px;border-bottom:1px solid #444;padding:9px 0}
+.stat strong{color:#d4af37}
+.scorebox{display:inline-block;background:#29230f;border:1px solid #d4af37;padding:10px;margin:5px;border-radius:7px;color:#d4af37;font-weight:bold}
 hr{border:0;border-top:1px solid #555;margin:15px 0}
 </style>
 </head>
+
 <body>
 
 <header>
@@ -53,6 +58,7 @@ hr{border:0;border-top:1px solid #555;margin:15px 0}
 
 <section id="home" class="active">
 <h2>Bienvenue</h2>
+
 <div class="card">
 <h3 class="gold">DRABO73 VIP PRONOS</h3>
 <p>Bienvenue dans ton espace de pronostics football.</p>
@@ -67,13 +73,13 @@ hr{border:0;border-top:1px solid #555;margin:15px 0}
 </div>
 
 <h2>Rencontres disponibles</h2>
-<div id="homeMatches">Chargement des rencontres...</div>
+<div id="homeMatches">Chargement...</div>
 </section>
 
 <section id="matches">
 <h2>Matchs disponibles</h2>
 <p class="small">Source : football-data.org</p>
-<div id="matchesList">Chargement des rencontres...</div>
+<div id="matchesList">Chargement...</div>
 </section>
 
 <section id="analysis">
@@ -93,6 +99,7 @@ Sélectionne un match pour consulter son analyse.
 <p>Paiement : Orange Money / Moov Money.</p>
 <p>Contacte l'administration pour la validation du paiement.</p>
 </div>
+
 <div class="card">
 <h3 class="gold">ACCÈS VIP</h3>
 <input id="vipCode" type="text" placeholder="Entre ton code VIP">
@@ -104,7 +111,7 @@ Sélectionne un match pour consulter son analyse.
 <section id="history">
 <h2>Historique des résultats</h2>
 <div id="historyList" class="card">
-Les scores réels seront affichés lorsqu'ils seront disponibles.
+Chargement des résultats...
 </div>
 </section>
 
@@ -129,30 +136,41 @@ Les scores réels seront affichés lorsqu'ils seront disponibles.
 
 <script>
 const API_BASE="https://drabo73-vip-pronos-2026-bf.onrender.com";
+
 let matches=[];
+let selectedMatch=null;
 
 function showPage(page){
  document.querySelectorAll("main section").forEach(s=>s.classList.remove("active"));
  const target=document.getElementById(page);
  if(target)target.classList.add("active");
+
  if(page==="matches")renderMatches("matchesList");
  if(page==="settings")checkServer();
+ if(page==="history")loadHistory();
 }
 
 async function apiRequest(endpoint){
  const response=await fetch(API_BASE+endpoint);
  let data;
- try{data=await response.json();}
- catch(e){throw new Error("Réponse du serveur invalide.");}
+
+ try{
+  data=await response.json();
+ }catch(e){
+  throw new Error("Réponse du serveur invalide.");
+ }
+
  if(!response.ok||data.status==="ERROR"){
   throw new Error(data.message||"Erreur HTTP "+response.status);
  }
+
  return data;
 }
 
 async function checkServer(){
  const status=document.getElementById("serverStatus");
  const home=document.getElementById("connectionStatus");
+
  try{
   await apiRequest("/api/status");
   status.textContent="Serveur connecté.";
@@ -170,14 +188,20 @@ async function checkServer(){
 async function loadMatches(){
  const home=document.getElementById("homeMatches");
  const list=document.getElementById("matchesList");
+
  home.textContent="Chargement des rencontres...";
  list.textContent="Chargement des rencontres...";
+
  try{
   const data=await apiRequest("/api/matches/upcoming");
+
   matches=Array.isArray(data.matches)?data.matches:[];
+
   document.getElementById("matchCount").textContent=matches.length;
+
   renderMatches("homeMatches");
   renderMatches("matchesList");
+
  }catch(e){
   const msg="Erreur de chargement : "+e.message;
   home.textContent=msg;
@@ -190,10 +214,12 @@ async function loadMatches(){
 function renderMatches(elementId){
  const list=document.getElementById(elementId);
  list.innerHTML="";
+
  if(!matches.length){
   list.textContent="Aucun match disponible actuellement.";
   return;
  }
+
  matches.forEach((match,index)=>{
   list.appendChild(createMatchCard(match,index));
  });
@@ -202,20 +228,19 @@ function renderMatches(elementId){
 function createMatchCard(match,index){
  const card=document.createElement("div");
  card.className="card";
+
  const home=match.homeTeam?.name||"Équipe domicile";
  const away=match.awayTeam?.name||"Équipe extérieure";
- const competition=match.competition?.name||"Compétition";
- const date=match.utcDate
-  ?new Date(match.utcDate).toLocaleString("fr-FR",{timeZone:"Africa/Ouagadougou"})
-  :"Date non disponible";
 
- const title=document.createElement("p");
- title.className="small";
- title.textContent=competition;
+ const competition=document.createElement("p");
+ competition.className="small";
+ competition.textContent=match.competition?.name||"Compétition";
 
- const dateEl=document.createElement("p");
- dateEl.className="date";
- dateEl.textContent=date;
+ const date=document.createElement("p");
+ date.className="date";
+ date.textContent=match.utcDate
+ ?new Date(match.utcDate).toLocaleString("fr-FR",{timeZone:"Africa/Ouagadougou"})
+ :"Date non disponible";
 
  const teams=document.createElement("div");
  teams.className="team";
@@ -230,58 +255,158 @@ function createMatchCard(match,index){
  button.textContent="Voir l'analyse";
  button.onclick=()=>showAnalysis(index);
 
- card.append(title,dateEl,teams,state,button);
+ card.append(competition,date,teams,state,button);
+
  return card;
+}
+
+function addText(container,label,value){
+ const p=document.createElement("p");
+ p.textContent=label+" : "+value;
+ container.appendChild(p);
 }
 
 function showAnalysis(index){
  const match=matches[index];
  if(!match)return;
+
+ selectedMatch=match;
+
  const home=match.homeTeam?.name||"Équipe domicile";
  const away=match.awayTeam?.name||"Équipe extérieure";
+
  const analysis=document.getElementById("analysisContent");
  analysis.innerHTML="";
 
  const title=document.createElement("h3");
  title.className="gold";
  title.textContent=home+" VS "+away;
+ analysis.appendChild(title);
 
- const details=[
-  "Compétition : "+(match.competition?.name||"Non disponible"),
-  "Date : "+(match.utcDate?new Date(match.utcDate).toLocaleString("fr-FR",{timeZone:"Africa/Ouagadougou"}):"Non disponible"),
-  "Statut : "+(match.status||"Inconnu")
- ];
- details.forEach(t=>{
-  const p=document.createElement("p");
-  p.textContent=t;
-  analysis.appendChild(p);
- });
+ addText(analysis,"Compétition",match.competition?.name||"Non disponible");
 
- const fullTime=match.score?.fullTime;
- const score=document.createElement("p");
- score.className="gold";
- score.textContent="Score réel : "+(fullTime?.home??"-")+" - "+(fullTime?.away??"-");
+ addText(
+  analysis,
+  "Date",
+  match.utcDate
+  ?new Date(match.utcDate).toLocaleString("fr-FR",{timeZone:"Africa/Ouagadougou"})
+  :"Non disponible"
+ );
+
+ addText(analysis,"Statut",match.status||"Inconnu");
+
+ analysis.appendChild(document.createElement("hr"));
+
+ const heading=document.createElement("h3");
+ heading.className="gold";
+ heading.textContent="ANALYSE DU MATCH";
+ analysis.appendChild(heading);
 
  const note=document.createElement("p");
- note.textContent="Les compositions et statistiques détaillées apparaîtront uniquement si les données sont disponibles.";
+ note.textContent="Analyse statistique : les données historiques détaillées des équipes ne sont pas encore disponibles via les informations reçues.";
+ analysis.appendChild(note);
+
+ const stats=document.createElement("h3");
+ stats.className="gold";
+ stats.textContent="STATISTIQUES";
+ analysis.appendChild(stats);
+
+ addText(analysis,"Attaque","Données non disponibles");
+ addText(analysis,"Milieu","Données non disponibles");
+ addText(analysis,"Défense","Données non disponibles");
+ addText(analysis,"Possession","Données non disponibles");
+ addText(analysis,"Tirs","Données non disponibles");
+ addText(analysis,"Corners","Données non disponibles");
+
+ analysis.appendChild(document.createElement("hr"));
+
+ const predictions=document.createElement("h3");
+ predictions.className="gold";
+ predictions.textContent="PRONOSTICS";
+ analysis.appendChild(predictions);
 
  const warning=document.createElement("p");
- warning.className="small";
- warning.textContent="Aucun score exact ni taux de réussite n'est inventé.";
+ warning.className="muted";
+ warning.textContent="Les probabilités et scores ne peuvent pas être calculés de manière fiable sans statistiques suffisantes.";
+ analysis.appendChild(warning);
 
- analysis.prepend(title);
- analysis.append(score,note,warning);
+ const scoreTitle=document.createElement("p");
+ scoreTitle.textContent="Scores exacts : non disponibles";
+ analysis.appendChild(scoreTitle);
+
+ const doubleChance=document.createElement("p");
+ doubleChance.textContent="Double chance : estimation non disponible";
+ analysis.appendChild(doubleChance);
+
+ const confidence=document.createElement("p");
+ confidence.textContent="Confiance : non évaluée";
+ analysis.appendChild(confidence);
+
+ const realScore=match.score?.fullTime;
+
+ const result=document.createElement("h3");
+ result.className="gold";
+ result.textContent="RÉSULTAT RÉEL";
+ result.style.marginTop="20px";
+
+ analysis.appendChild(result);
+
+ addText(
+  analysis,
+  "Score",
+  realScore?.home!=null&&realScore?.away!=null
+  ?realScore.home+" - "+realScore.away
+  :"Pas encore disponible"
+ );
+
+ const disclaimer=document.createElement("p");
+ disclaimer.className="small";
+ disclaimer.textContent="DRABO73 VIP PRONOS : aucune garantie de gain. Les pronostics sportifs comportent des risques.";
+ analysis.appendChild(disclaimer);
+
  showPage("analysis");
+}
+
+async function loadHistory(){
+ const history=document.getElementById("historyList");
+ history.innerHTML="";
+
+ let completed=matches.filter(match=>
+  match.status==="FINISHED" &&
+  match.score?.fullTime?.home!=null &&
+  match.score?.fullTime?.away!=null
+ );
+
+ if(!completed.length){
+  history.textContent="Aucun résultat terminé disponible dans les rencontres chargées.";
+  return;
+ }
+
+ completed.forEach(match=>{
+  const item=document.createElement("div");
+  item.className="stat";
+
+  const teams=document.createElement("span");
+  teams.textContent=(match.homeTeam?.name||"Domicile")+" VS "+(match.awayTeam?.name||"Extérieur");
+
+  const score=document.createElement("strong");
+  score.textContent=match.score.fullTime.home+" - "+match.score.fullTime.away;
+
+  item.append(teams,score);
+  history.appendChild(item);
+ });
 }
 
 function checkVIP(){
  const code=document.getElementById("vipCode").value.trim();
  const message=document.getElementById("vipMessage");
+
  if(!code){
   message.textContent="Entre ton code VIP.";
   message.className="error";
   return;
  }
+
  message.textContent="Validation administrative nécessaire. Contacte l'administration.";
  message.className="gold";
 }
@@ -289,5 +414,6 @@ function checkVIP(){
 checkServer();
 loadMatches();
 </script>
+
 </body>
 </html>
