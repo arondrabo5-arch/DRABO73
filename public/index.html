@@ -5,100 +5,32 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="theme-color" content="#080808">
-<meta name="description" content="DRABO73 VIP PRONOS - Analyses et pronostics football">
+<meta name="description" content="DRABO73 VIP PRONOS">
 <title>DRABO73 VIP PRONOS</title>
 
 <style>
 *{box-sizing:border-box}
-body{
- margin:0;
- background:#080808;
- color:white;
- font-family:Arial,sans-serif;
-}
-header{
- background:#111;
- border-bottom:2px solid #d4af37;
- padding:22px 12px;
- text-align:center;
-}
-header h1{
- color:#d4af37;
- margin:0;
- font-size:25px;
-}
+body{margin:0;background:#080808;color:white;font-family:Arial,sans-serif}
+header{background:#111;border-bottom:2px solid #d4af37;padding:22px 12px;text-align:center}
+header h1{color:#d4af37;margin:0;font-size:25px}
 header p{color:#ddd;margin:8px 0 0}
-nav{
- display:flex;
- flex-wrap:wrap;
- justify-content:center;
- background:#151515;
- gap:7px;
- padding:12px 5px;
-}
-nav button{
- background:#242424;
- border:1px solid #d4af37;
- color:#d4af37;
- padding:10px;
- border-radius:7px;
-}
+nav{display:flex;flex-wrap:wrap;justify-content:center;background:#151515;gap:7px;padding:12px 5px}
+nav button{background:#242424;border:1px solid #d4af37;color:#d4af37;padding:10px;border-radius:7px}
 main{padding:15px;max-width:850px;margin:auto}
 section{display:none}
 section.active{display:block}
 h2{color:#d4af37}
-.card{
- background:#171717;
- border:1px solid #8f7627;
- border-radius:12px;
- padding:15px;
- margin:12px 0;
-}
-.team{
- text-align:center;
- font-weight:bold;
- font-size:17px;
- margin:12px 0;
-}
+.card{background:#171717;border:1px solid #8f7627;border-radius:12px;padding:15px;margin:12px 0}
+.team{text-align:center;font-weight:bold;font-size:17px;margin:12px 0}
 .date,.small{color:#bbb;font-size:13px}
 .gold{color:#d4af37}
-.action{
- background:#d4af37;
- color:#111;
- border:0;
- border-radius:7px;
- padding:11px 15px;
- font-weight:bold;
- margin-top:10px;
-}
-.secondary{
- background:#252525;
- color:#d4af37;
- border:1px solid #d4af37;
- border-radius:7px;
- padding:10px;
-}
-.result{
- color:#d4af37;
- font-weight:bold;
- font-size:18px;
-}
-input{
- width:100%;
- padding:12px;
- background:#222;
- color:white;
- border:1px solid #d4af37;
- border-radius:6px;
- margin:8px 0;
-}
-footer{
- text-align:center;
- padding:20px;
- color:#999;
- border-top:1px solid #444;
- margin-top:30px;
-}
+.action{background:#d4af37;color:#111;border:0;border-radius:7px;padding:11px 15px;font-weight:bold;margin-top:10px}
+.secondary{background:#252525;color:#d4af37;border:1px solid #d4af37;border-radius:7px;padding:10px}
+input{width:100%;padding:12px;background:#222;color:white;border:1px solid #d4af37;border-radius:6px;margin:8px 0}
+footer{text-align:center;padding:20px;color:#999;border-top:1px solid #444;margin-top:30px}
+.error{color:#ff7777}
+.success{color:#70d890}
+hr{border:0;border-top:1px solid #555;margin:15px 0}
 </style>
 </head>
 
@@ -123,12 +55,14 @@ footer{
 
 <section id="home" class="active">
 <h2>Bienvenue</h2>
+
 <div class="card">
 <h3 class="gold">DRABO73 VIP PRONOS</h3>
 <p>Bienvenue dans ton espace de pronostics football.</p>
-<p>Des rencontres réelles, des analyses et des statistiques pour mieux comprendre les matchs.</p>
-<p class="gold">La confiance reste.</p>
+<p>Des rencontres réelles et des analyses pour mieux comprendre les matchs.</p>
+<p class="gold">LA CONFIANCE RESTE.</p>
 </div>
+
 <div class="card">
 <p>Matchs disponibles : <strong id="matchCount">0</strong></p>
 <p id="connectionStatus">Connexion au serveur...</p>
@@ -138,7 +72,7 @@ footer{
 
 <section id="matches">
 <h2>Matchs du jour</h2>
-<p class="small">Rencontres fournies par football-data.org.</p>
+<p class="small">Source : football-data.org</p>
 <div id="matchesList">Chargement des rencontres...</div>
 </section>
 
@@ -151,15 +85,18 @@ Sélectionne un match pour consulter son analyse.
 
 <section id="vip">
 <h2>Pronostics VIP</h2>
+
 <div class="card">
-<h3 class="gold">Abonnements VIP</h3>
+<h3 class="gold">ABONNEMENTS VIP</h3>
 <p>7 jours : 5 000 FCFA</p>
 <p>30 jours : 15 000 FCFA</p>
 <p>90 jours : 35 000 FCFA</p>
-<p>Contacte l'administration pour les modalités de paiement Orange Money ou Moov Money.</p>
+<p>Paiement : Orange Money / Moov Money.</p>
+<p>Contacte l'administration pour la validation du paiement.</p>
 </div>
+
 <div class="card">
-<h3 class="gold">Accès VIP</h3>
+<h3 class="gold">ACCÈS VIP</h3>
 <input id="vipCode" type="text" placeholder="Entre ton code VIP">
 <button class="action" onclick="checkVIP()">Vérifier mon accès</button>
 <p id="vipMessage"></p>
@@ -169,7 +106,7 @@ Sélectionne un match pour consulter son analyse.
 <section id="history">
 <h2>Historique des résultats</h2>
 <div id="historyList" class="card">
-Les résultats seront affichés lorsqu'ils seront disponibles sur le serveur.
+Les scores réels seront affichés lorsqu'ils seront disponibles.
 </div>
 </section>
 
@@ -178,7 +115,7 @@ Les résultats seront affichés lorsqu'ils seront disponibles sur le serveur.
 <div class="card">
 <p>Application : DRABO73 VIP PRONOS</p>
 <p>Serveur : Render</p>
-<p>Source des matchs : football-data.org</p>
+<p>Source : football-data.org</p>
 <p id="serverStatus">Vérification du serveur...</p>
 <button class="action" onclick="checkServer()">Tester la connexion</button>
 </div>
@@ -209,21 +146,46 @@ function showPage(page){
  if(page==="settings") checkServer();
 }
 
+async function apiRequest(endpoint){
+ const response=await fetch(API_BASE+endpoint);
+ let data;
+
+ try{
+  data=await response.json();
+ }catch(error){
+  throw new Error("Réponse du serveur invalide.");
+ }
+
+ if(!response.ok || data.status==="ERROR"){
+  throw new Error(
+   data.message || "Erreur HTTP "+response.status
+  );
+ }
+
+ return data;
+}
+
 async function checkServer(){
  const status=document.getElementById("serverStatus");
  const homeStatus=document.getElementById("connectionStatus");
 
- try{
-  const response=await fetch(API_BASE+"/api/status");
-  if(!response.ok) throw new Error("HTTP "+response.status);
+ status.textContent="Connexion en cours...";
 
-  const data=await response.json();
+ try{
+  const data=await apiRequest("/api/status");
 
   status.textContent="Serveur connecté.";
-  if(homeStatus) homeStatus.textContent="Serveur connecté.";
+  status.className="success";
+
+  homeStatus.textContent="Serveur connecté.";
+  homeStatus.className="success";
+
  }catch(error){
-  status.textContent="Erreur de connexion : "+error.message;
-  if(homeStatus) homeStatus.textContent="Serveur indisponible.";
+  status.textContent="Erreur : "+error.message;
+  status.className="error";
+
+  homeStatus.textContent="Serveur indisponible.";
+  homeStatus.className="error";
  }
 }
 
@@ -234,15 +196,7 @@ async function loadMatches(){
  list.textContent="Chargement des rencontres...";
 
  try{
-  const response=await fetch(
-   API_BASE+"/api/matches/upcoming"
-  );
-
-  if(!response.ok){
-   throw new Error("Erreur API : "+response.status);
-  }
-
-  const data=await response.json();
+  const data=await apiRequest("/api/matches/upcoming");
 
   matches=Array.isArray(data.matches)
    ? data.matches : [];
@@ -260,7 +214,11 @@ async function loadMatches(){
   });
 
  }catch(error){
-  list.textContent="Impossible de charger les matchs : "+error.message;
+  list.innerHTML="";
+  const message=document.createElement("p");
+  message.className="error";
+  message.textContent="Erreur de chargement : "+error.message;
+  list.appendChild(message);
  }
 }
 
@@ -277,23 +235,39 @@ function createMatchCard(match,index){
 
  const competition=match.competition?.name || "Compétition";
 
- card.innerHTML=`
-  <p class="small">${escapeHTML(competition)}</p>
-  <p class="date">${escapeHTML(date)}</p>
-  <div class="team">
-   ${escapeHTML(home)}
-   <span class="gold"> VS </span>
-   ${escapeHTML(away)}
-  </div>
-  <p class="small">Statut : ${escapeHTML(match.status || "Inconnu")}</p>
-  <button class="action" data-index="${index}">
-   Voir l'analyse
-  </button>
- `;
+ const title=document.createElement("p");
+ title.className="small";
+ title.textContent=competition;
 
- card.querySelector("button").addEventListener("click",()=>{
-  showAnalysis(index);
- });
+ const dateElement=document.createElement("p");
+ dateElement.className="date";
+ dateElement.textContent=date;
+
+ const teams=document.createElement("div");
+ teams.className="team";
+
+ const homeElement=document.createElement("span");
+ homeElement.textContent=home;
+
+ const vs=document.createElement("span");
+ vs.className="gold";
+ vs.textContent=" VS ";
+
+ const awayElement=document.createElement("span");
+ awayElement.textContent=away;
+
+ teams.append(homeElement,vs,awayElement);
+
+ const state=document.createElement("p");
+ state.className="small";
+ state.textContent="Statut : "+(match.status || "Inconnu");
+
+ const button=document.createElement("button");
+ button.className="action";
+ button.textContent="Voir l'analyse";
+ button.onclick=()=>showAnalysis(index);
+
+ card.append(title,dateElement,teams,state,button);
 
  return card;
 }
@@ -307,29 +281,45 @@ function showAnalysis(index){
 
  const analysis=document.getElementById("analysisContent");
 
- analysis.innerHTML=`
-  <h3 class="gold">${escapeHTML(home)} VS ${escapeHTML(away)}</h3>
-  <p>Compétition : ${escapeHTML(match.competition?.name || "Non disponible")}</p>
-  <p>Date : ${escapeHTML(match.utcDate || "Non disponible")}</p>
-  <p>Statut : ${escapeHTML(match.status || "Inconnu")}</p>
-  <p>Score réel : ${match.score?.fullTime?.home ?? "-"} - ${match.score?.fullTime?.away ?? "-"}</p>
-  <hr>
-  <p class="gold">Analyse statistique</p>
-  <p>Les compositions, statistiques et données historiques ne sont affichées que si elles sont disponibles auprès de la source.</p>
-  <p>Aucun score exact ou taux de réussite n'est inventé.</p>
- `;
+ analysis.innerHTML="";
+
+ const title=document.createElement("h3");
+ title.className="gold";
+ title.textContent=home+" VS "+away;
+
+ const competition=document.createElement("p");
+ competition.textContent="Compétition : "+
+ (match.competition?.name || "Non disponible");
+
+ const date=document.createElement("p");
+ date.textContent="Date : "+
+ (match.utcDate ? new Date(match.utcDate).toLocaleString("fr-FR") : "Non disponible");
+
+ const status=document.createElement("p");
+ status.textContent="Statut : "+(match.status || "Inconnu");
+
+ const score=document.createElement("p");
+ score.className="gold";
+
+ const fullTime=match.score?.fullTime;
+ score.textContent="Score réel : "+
+ (fullTime?.home ?? "-")+" - "+(fullTime?.away ?? "-");
+
+ const note=document.createElement("p");
+ note.textContent=
+ "Les compositions et statistiques détaillées apparaîtront uniquement si les données sont disponibles.";
+
+ const warning=document.createElement("p");
+ warning.className="small";
+ warning.textContent=
+ "Aucun score exact ni taux de réussite n'est inventé.";
+
+ analysis.append(
+  title,competition,date,status,score,
+  document.createElement("hr"),note,warning
+ );
 
  showPage("analysis");
-}
-
-function escapeHTML(value){
- return String(value).replace(/[&<>"']/g,char=>({
-  "&":"&amp;",
-  "<":"&lt;",
-  ">":"&gt;",
-  '"':"&quot;",
-  "'":"&#39;"
- }[char]));
 }
 
 function checkVIP(){
@@ -338,11 +328,14 @@ function checkVIP(){
 
  if(!code){
   message.textContent="Entre ton code VIP.";
+  message.className="error";
   return;
  }
 
  message.textContent=
  "Validation administrative nécessaire. Contacte l'administration.";
+
+ message.className="gold";
 }
 
 checkServer();
