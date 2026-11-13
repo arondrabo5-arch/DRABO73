@@ -3,42 +3,38 @@
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#080808">
-<meta name="description" content="DRABO73 VIP PRONOS">
 <title>DRABO73 VIP PRONOS</title>
 
 <style>
 *{box-sizing:border-box}
 body{margin:0;background:#080808;color:white;font-family:Arial,sans-serif}
-header{background:#111;border-bottom:2px solid #d4af37;padding:22px 12px;text-align:center}
-header h1{color:#d4af37;margin:0;font-size:25px}
-header p{color:#ddd;margin:8px 0 0}
-nav{display:flex;flex-wrap:wrap;justify-content:center;background:#151515;gap:7px;padding:12px 5px}
-nav button{background:#242424;border:1px solid #d4af37;color:#d4af37;padding:10px;border-radius:7px}
-main{padding:15px;max-width:850px;margin:auto}
+header{text-align:center;background:#111;padding:22px;border-bottom:2px solid #d4af37}
+header h1{color:#d4af37;margin:0}
+header p{margin:8px}
+nav{display:flex;flex-wrap:wrap;justify-content:center;gap:7px;background:#151515;padding:12px}
+button{cursor:pointer}
+nav button{background:#242424;color:#d4af37;border:1px solid #d4af37;border-radius:7px;padding:10px}
+main{max-width:850px;margin:auto;padding:15px}
 section{display:none}
 section.active{display:block}
-h2{color:#d4af37}
+h2,.gold{color:#d4af37}
 .card{background:#171717;border:1px solid #8f7627;border-radius:12px;padding:15px;margin:12px 0}
-.team{text-align:center;font-weight:bold;font-size:17px;margin:12px 0}
-.date,.small{color:#bbb;font-size:13px}
-.gold{color:#d4af37}
+.team{text-align:center;font-weight:bold;font-size:17px;margin:12px}
+.small,.date{font-size:13px;color:#bbb}
 .action{background:#d4af37;color:#111;border:0;border-radius:7px;padding:11px 15px;font-weight:bold;margin-top:10px}
 input{width:100%;padding:12px;background:#222;color:white;border:1px solid #d4af37;border-radius:6px;margin:8px 0}
-footer{text-align:center;padding:20px;color:#999;border-top:1px solid #444;margin-top:30px}
-.error{color:#ff7777}
+footer{text-align:center;padding:20px;color:#999;border-top:1px solid #444}
 .success{color:#70d890}
-.muted{color:#aaa}
+.error{color:#ff7777}
 .stat{display:flex;justify-content:space-between;gap:10px;border-bottom:1px solid #444;padding:9px 0}
 .stat strong{color:#d4af37}
 .scorebox{display:inline-block;background:#29230f;border:1px solid #d4af37;padding:10px;margin:5px;border-radius:7px;color:#d4af37;font-weight:bold}
-hr{border:0;border-top:1px solid #555;margin:15px 0}
 </style>
 </head>
 
 <body>
-
 <header>
 <h1>DRABO73 VIP PRONOS</h1>
 <p>LA CONFIANCE RESTE</p>
@@ -58,20 +54,17 @@ hr{border:0;border-top:1px solid #555;margin:15px 0}
 
 <section id="home" class="active">
 <h2>Bienvenue</h2>
-
 <div class="card">
 <h3 class="gold">DRABO73 VIP PRONOS</h3>
 <p>Bienvenue dans ton espace de pronostics football.</p>
 <p>Des rencontres réelles et des analyses pour mieux comprendre les matchs.</p>
 <p class="gold">LA CONFIANCE RESTE.</p>
 </div>
-
 <div class="card">
 <p>Matchs disponibles : <strong id="matchCount">0</strong></p>
 <p id="connectionStatus">Connexion au serveur...</p>
 <button class="action" onclick="loadMatches()">Actualiser les matchs</button>
 </div>
-
 <h2>Rencontres disponibles</h2>
 <div id="homeMatches">Chargement...</div>
 </section>
@@ -84,9 +77,7 @@ hr{border:0;border-top:1px solid #555;margin:15px 0}
 
 <section id="analysis">
 <h2>Analyses des matchs</h2>
-<div id="analysisContent" class="card">
-Sélectionne un match pour consulter son analyse.
-</div>
+<div id="analysisContent" class="card">Sélectionne un match.</div>
 </section>
 
 <section id="vip">
@@ -97,12 +88,10 @@ Sélectionne un match pour consulter son analyse.
 <p>30 jours : 15 000 FCFA</p>
 <p>90 jours : 35 000 FCFA</p>
 <p>Paiement : Orange Money / Moov Money.</p>
-<p>Contacte l'administration pour la validation du paiement.</p>
 </div>
-
 <div class="card">
 <h3 class="gold">ACCÈS VIP</h3>
-<input id="vipCode" type="text" placeholder="Entre ton code VIP">
+<input id="vipCode" placeholder="Entre ton code VIP">
 <button class="action" onclick="checkVIP()">Vérifier mon accès</button>
 <p id="vipMessage"></p>
 </div>
@@ -110,9 +99,7 @@ Sélectionne un match pour consulter son analyse.
 
 <section id="history">
 <h2>Historique des résultats</h2>
-<div id="historyList" class="card">
-Chargement des résultats...
-</div>
+<div id="historyList" class="card">Chargement...</div>
 </section>
 
 <section id="settings">
@@ -121,11 +108,10 @@ Chargement des résultats...
 <p>Application : DRABO73 VIP PRONOS</p>
 <p>Serveur : Render</p>
 <p>Source : football-data.org</p>
-<p id="serverStatus">Vérification du serveur...</p>
+<p id="serverStatus">Vérification...</p>
 <button class="action" onclick="checkServer()">Tester la connexion</button>
 </div>
 </section>
-
 </main>
 
 <footer>
@@ -136,284 +122,282 @@ Chargement des résultats...
 
 <script>
 const API_BASE="https://drabo73-vip-pronos-2026-bf.onrender.com";
-
 let matches=[];
-let selectedMatch=null;
 
 function showPage(page){
  document.querySelectorAll("main section").forEach(s=>s.classList.remove("active"));
- const target=document.getElementById(page);
- if(target)target.classList.add("active");
-
+ document.getElementById(page).classList.add("active");
  if(page==="matches")renderMatches("matchesList");
- if(page==="settings")checkServer();
  if(page==="history")loadHistory();
+ if(page==="settings")checkServer();
 }
 
 async function apiRequest(endpoint){
  const response=await fetch(API_BASE+endpoint);
  let data;
-
- try{
-  data=await response.json();
- }catch(e){
-  throw new Error("Réponse du serveur invalide.");
- }
-
- if(!response.ok||data.status==="ERROR"){
-  throw new Error(data.message||"Erreur HTTP "+response.status);
- }
-
+ try{data=await response.json()}catch(e){throw new Error("Réponse invalide")}
+ if(!response.ok||data.status==="ERROR")throw new Error(data.message||"Erreur "+response.status);
  return data;
 }
 
 async function checkServer(){
- const status=document.getElementById("serverStatus");
- const home=document.getElementById("connectionStatus");
-
  try{
   await apiRequest("/api/status");
-  status.textContent="Serveur connecté.";
-  status.className="success";
-  home.textContent="Serveur connecté.";
-  home.className="success";
+  document.getElementById("serverStatus").textContent="Serveur connecté.";
+  document.getElementById("connectionStatus").textContent="Serveur connecté.";
+  document.getElementById("serverStatus").className="success";
+  document.getElementById("connectionStatus").className="success";
  }catch(e){
-  status.textContent="Erreur : "+e.message;
-  status.className="error";
-  home.textContent="Serveur indisponible : "+e.message;
-  home.className="error";
+  document.getElementById("serverStatus").textContent=e.message;
+  document.getElementById("connectionStatus").textContent="Serveur indisponible : "+e.message;
  }
 }
 
 async function loadMatches(){
- const home=document.getElementById("homeMatches");
- const list=document.getElementById("matchesList");
-
- home.textContent="Chargement des rencontres...";
- list.textContent="Chargement des rencontres...";
-
+ document.getElementById("homeMatches").textContent="Chargement...";
+ document.getElementById("matchesList").textContent="Chargement...";
  try{
   const data=await apiRequest("/api/matches/upcoming");
-
   matches=Array.isArray(data.matches)?data.matches:[];
-
   document.getElementById("matchCount").textContent=matches.length;
-
   renderMatches("homeMatches");
   renderMatches("matchesList");
-
  }catch(e){
-  const msg="Erreur de chargement : "+e.message;
-  home.textContent=msg;
-  list.textContent=msg;
-  home.className="error";
-  list.className="error";
+  document.getElementById("homeMatches").textContent="Erreur : "+e.message;
+  document.getElementById("matchesList").textContent="Erreur : "+e.message;
  }
 }
 
-function renderMatches(elementId){
- const list=document.getElementById(elementId);
+function renderMatches(id){
+ const list=document.getElementById(id);
  list.innerHTML="";
-
- if(!matches.length){
-  list.textContent="Aucun match disponible actuellement.";
-  return;
- }
-
- matches.forEach((match,index)=>{
-  list.appendChild(createMatchCard(match,index));
- });
+ if(!matches.length){list.textContent="Aucun match disponible.";return}
+ matches.forEach((m,i)=>list.appendChild(createMatchCard(m,i)));
 }
 
-function createMatchCard(match,index){
+function createMatchCard(m,i){
  const card=document.createElement("div");
  card.className="card";
-
- const home=match.homeTeam?.name||"Équipe domicile";
- const away=match.awayTeam?.name||"Équipe extérieure";
-
- const competition=document.createElement("p");
- competition.className="small";
- competition.textContent=match.competition?.name||"Compétition";
-
+ const p=document.createElement("p");
+ p.className="small";
+ p.textContent=m.competition?.name||"Compétition";
  const date=document.createElement("p");
  date.className="date";
- date.textContent=match.utcDate
- ?new Date(match.utcDate).toLocaleString("fr-FR",{timeZone:"Africa/Ouagadougou"})
- :"Date non disponible";
-
+ date.textContent=m.utcDate?new Date(m.utcDate).toLocaleString("fr-FR",{timeZone:"Africa/Ouagadougou"}):"Date inconnue";
  const teams=document.createElement("div");
  teams.className="team";
- teams.textContent=home+" VS "+away;
-
+ teams.textContent=(m.homeTeam?.name||"Domicile")+" VS "+(m.awayTeam?.name||"Extérieur");
  const state=document.createElement("p");
  state.className="small";
- state.textContent="Statut : "+(match.status||"Inconnu");
-
- const button=document.createElement("button");
- button.className="action";
- button.textContent="Voir l'analyse";
- button.onclick=()=>showAnalysis(index);
-
- card.append(competition,date,teams,state,button);
-
+ state.textContent="Statut : "+(m.status||"Inconnu");
+ const b=document.createElement("button");
+ b.className="action";
+ b.textContent="Voir l'analyse";
+ b.onclick=()=>showAnalysis(i);
+ card.append(p,date,teams,state,b);
  return card;
 }
 
-function addText(container,label,value){
- const p=document.createElement("p");
- p.textContent=label+" : "+value;
- container.appendChild(p);
+/* Calculs mathématiques de Poisson */
+function poisson(lambda,k){
+ let fact=1;
+ for(let i=1;i<=k;i++)fact*=i;
+ return Math.exp(-lambda)*Math.pow(lambda,k)/fact;
 }
 
+function calculatePrediction(match){
+ const homeId=match.homeTeam?.id;
+ const awayId=match.awayTeam?.id;
+
+ const previous=matches.filter(m=>
+  m.status==="FINISHED" &&
+  m.score?.fullTime?.home!=null &&
+  m.score?.fullTime?.away!=null &&
+  (m.homeTeam?.id===homeId||m.awayTeam?.id===homeId||
+   m.homeTeam?.id===awayId||m.awayTeam?.id===awayId)
+ );
+
+ const homeGames=previous.filter(m=>
+  m.homeTeam?.id===homeId||m.awayTeam?.id===homeId
+ );
+ const awayGames=previous.filter(m=>
+  m.homeTeam?.id===awayId||m.awayTeam?.id===awayId
+ );
+
+ if(homeGames.length<3||awayGames.length<3){
+  return {available:false,message:"Historique insuffisant : au moins 3 matchs terminés par équipe sont nécessaires."};
+ }
+
+ function averageScored(games,id){
+  return games.reduce((sum,m)=>{
+   const h=m.homeTeam?.id===id;
+   return sum+(h?m.score.fullTime.home:m.score.fullTime.away);
+  },0)/games.length;
+ }
+
+ function averageConceded(games,id){
+  return games.reduce((sum,m)=>{
+   const h=m.homeTeam?.id===id;
+   return sum+(h?m.score.fullTime.away:m.score.fullTime.home);
+  },0)/games.length;
+ }
+
+ const homeAttack=averageScored(homeGames,homeId);
+ const homeDefense=averageConceded(homeGames,homeId);
+ const awayAttack=averageScored(awayGames,awayId);
+ const awayDefense=averageConceded(awayGames,awayId);
+
+ const lambdaHome=Math.max(0.2,Math.min(4,(homeAttack+awayDefense)/2));
+ const lambdaAway=Math.max(0.2,Math.min(4,(awayAttack+homeDefense)/2));
+
+ let h=0,d=0,a=0,total=0;
+ const scores=[];
+
+ for(let x=0;x<=6;x++){
+  for(let y=0;y<=6;y++){
+   const probability=poisson(lambdaHome,x)*poisson(lambdaAway,y);
+   total+=probability;
+   if(x>y)h+=probability;
+   else if(x===y)d+=probability;
+   else a+=probability;
+   scores.push({home:x,away:y,p:probability});
+  }
+ }
+
+ scores.sort((x,y)=>y.p-x.p);
+
+ return {
+  available:true,
+  lambdaHome,
+  lambdaAway,
+  home:h/total,
+  draw:d/total,
+  away:a/total,
+  over25:scores.reduce((s,v)=>s+(v.home+v.away>2?v.p:0),0)/total,
+  scores:scores.slice(0,3),
+  homeAttack,homeDefense,awayAttack,awayDefense,
+  sample:homeGames.length+awayGames.length
+ };
+}
+
+function pct(v){return (v*100).toFixed(1)+" %"}
+
 function showAnalysis(index){
- const match=matches[index];
- if(!match)return;
+ const m=matches[index];
+ if(!m)return;
 
- selectedMatch=match;
-
- const home=match.homeTeam?.name||"Équipe domicile";
- const away=match.awayTeam?.name||"Équipe extérieure";
-
- const analysis=document.getElementById("analysisContent");
- analysis.innerHTML="";
+ const box=document.getElementById("analysisContent");
+ box.innerHTML="";
 
  const title=document.createElement("h3");
  title.className="gold";
- title.textContent=home+" VS "+away;
- analysis.appendChild(title);
+ title.textContent=(m.homeTeam?.name||"Domicile")+" VS "+(m.awayTeam?.name||"Extérieur");
+ box.appendChild(title);
 
- addText(analysis,"Compétition",match.competition?.name||"Non disponible");
+ const info=document.createElement("p");
+ info.textContent="Compétition : "+(m.competition?.name||"Inconnue");
+ box.appendChild(info);
 
- addText(
-  analysis,
-  "Date",
-  match.utcDate
-  ?new Date(match.utcDate).toLocaleString("fr-FR",{timeZone:"Africa/Ouagadougou"})
-  :"Non disponible"
- );
-
- addText(analysis,"Statut",match.status||"Inconnu");
-
- analysis.appendChild(document.createElement("hr"));
+ const prediction=calculatePrediction(m);
 
  const heading=document.createElement("h3");
  heading.className="gold";
- heading.textContent="ANALYSE DU MATCH";
- analysis.appendChild(heading);
+ heading.textContent="ANALYSE ET PRONOSTICS";
+ box.appendChild(heading);
 
- const note=document.createElement("p");
- note.textContent="Analyse statistique : les données historiques détaillées des équipes ne sont pas encore disponibles via les informations reçues.";
- analysis.appendChild(note);
+ if(!prediction.available){
+  const warning=document.createElement("p");
+  warning.className="error";
+  warning.textContent=prediction.message;
+  box.appendChild(warning);
+  const note=document.createElement("p");
+  note.textContent="Les pronostics automatiques ne sont pas affichés sans données historiques suffisantes.";
+  box.appendChild(note);
+ }else{
+  addText(box,"Buts estimés domicile",prediction.lambdaHome.toFixed(2));
+  addText(box,"Buts estimés extérieur",prediction.lambdaAway.toFixed(2));
+  addText(box,"Attaque domicile",prediction.homeAttack.toFixed(2)+" buts par match");
+  addText(box,"Défense domicile",prediction.homeDefense.toFixed(2)+" buts encaissés par match");
+  addText(box,"Attaque extérieur",prediction.awayAttack.toFixed(2)+" buts par match");
+  addText(box,"Défense extérieur",prediction.awayDefense.toFixed(2)+" buts encaissés par match");
 
- const stats=document.createElement("h3");
- stats.className="gold";
- stats.textContent="STATISTIQUES";
- analysis.appendChild(stats);
+  box.appendChild(document.createElement("hr"));
+  addText(box,"Victoire domicile",pct(prediction.home));
+  addText(box,"Match nul",pct(prediction.draw));
+  addText(box,"Victoire extérieur",pct(prediction.away));
+  addText(box,"Double chance 1X",pct(prediction.home+prediction.draw));
+  addText(box,"Double chance X2",pct(prediction.away+prediction.draw));
+  addText(box,"Double chance 12",pct(prediction.home+prediction.away));
+  addText(box,"Plus de 2,5 buts",pct(prediction.over25));
+  addText(box,"Moins de 2,5 buts",pct(1-prediction.over25));
 
- addText(analysis,"Attaque","Données non disponibles");
- addText(analysis,"Milieu","Données non disponibles");
- addText(analysis,"Défense","Données non disponibles");
- addText(analysis,"Possession","Données non disponibles");
- addText(analysis,"Tirs","Données non disponibles");
- addText(analysis,"Corners","Données non disponibles");
+  const scores=document.createElement("h3");
+  scores.className="gold";
+  scores.textContent="TROIS SCORES EXACTS ESTIMÉS";
+  box.appendChild(scores);
 
- analysis.appendChild(document.createElement("hr"));
+  prediction.scores.forEach(s=>{
+   const span=document.createElement("span");
+   span.className="scorebox";
+   span.textContent=s.home+" - "+s.away+" ("+pct(s.p)+")";
+   box.appendChild(span);
+  });
 
- const predictions=document.createElement("h3");
- predictions.className="gold";
- predictions.textContent="PRONOSTICS";
- analysis.appendChild(predictions);
+  addText(box,"Historique utilisé",prediction.sample+" apparitions cumulées");
+  addText(box,"Corners","Données indisponibles");
+  addText(box,"Possession et tirs","Données indisponibles");
 
- const warning=document.createElement("p");
- warning.className="muted";
- warning.textContent="Les probabilités et scores ne peuvent pas être calculés de manière fiable sans statistiques suffisantes.";
- analysis.appendChild(warning);
-
- const scoreTitle=document.createElement("p");
- scoreTitle.textContent="Scores exacts : non disponibles";
- analysis.appendChild(scoreTitle);
-
- const doubleChance=document.createElement("p");
- doubleChance.textContent="Double chance : estimation non disponible";
- analysis.appendChild(doubleChance);
-
- const confidence=document.createElement("p");
- confidence.textContent="Confiance : non évaluée";
- analysis.appendChild(confidence);
-
- const realScore=match.score?.fullTime;
+  const caution=document.createElement("p");
+  caution.className="small";
+  caution.textContent="Estimations Poisson basées uniquement sur les matchs terminés présents dans la liste chargée. Elles ne sont pas des garanties et peuvent être biaisées par un échantillon limité.";
+  box.appendChild(caution);
+ }
 
  const result=document.createElement("h3");
  result.className="gold";
  result.textContent="RÉSULTAT RÉEL";
- result.style.marginTop="20px";
+ box.appendChild(result);
 
- analysis.appendChild(result);
-
- addText(
-  analysis,
-  "Score",
-  realScore?.home!=null&&realScore?.away!=null
-  ?realScore.home+" - "+realScore.away
-  :"Pas encore disponible"
- );
-
- const disclaimer=document.createElement("p");
- disclaimer.className="small";
- disclaimer.textContent="DRABO73 VIP PRONOS : aucune garantie de gain. Les pronostics sportifs comportent des risques.";
- analysis.appendChild(disclaimer);
+ const score=m.score?.fullTime;
+ addText(box,"Score",score?.home!=null&&score?.away!=null?score.home+" - "+score.away:"Pas encore disponible");
 
  showPage("analysis");
 }
 
-async function loadHistory(){
- const history=document.getElementById("historyList");
- history.innerHTML="";
+function addText(box,label,value){
+ const p=document.createElement("p");
+ p.textContent=label+" : "+value;
+ box.appendChild(p);
+}
 
- let completed=matches.filter(match=>
-  match.status==="FINISHED" &&
-  match.score?.fullTime?.home!=null &&
-  match.score?.fullTime?.away!=null
+function loadHistory(){
+ const box=document.getElementById("historyList");
+ box.innerHTML="";
+ const completed=matches.filter(m=>
+  m.status==="FINISHED"&&
+  m.score?.fullTime?.home!=null&&
+  m.score?.fullTime?.away!=null
  );
-
  if(!completed.length){
-  history.textContent="Aucun résultat terminé disponible dans les rencontres chargées.";
+  box.textContent="Aucun résultat terminé disponible dans les matchs chargés.";
   return;
  }
-
- completed.forEach(match=>{
-  const item=document.createElement("div");
-  item.className="stat";
-
-  const teams=document.createElement("span");
-  teams.textContent=(match.homeTeam?.name||"Domicile")+" VS "+(match.awayTeam?.name||"Extérieur");
-
-  const score=document.createElement("strong");
-  score.textContent=match.score.fullTime.home+" - "+match.score.fullTime.away;
-
-  item.append(teams,score);
-  history.appendChild(item);
+ completed.forEach(m=>{
+  const p=document.createElement("p");
+  p.textContent=(m.homeTeam?.name||"Domicile")+" "+m.score.fullTime.home+" - "+m.score.fullTime.away+" "+(m.awayTeam?.name||"Extérieur");
+  box.appendChild(p);
  });
 }
 
 function checkVIP(){
  const code=document.getElementById("vipCode").value.trim();
- const message=document.getElementById("vipMessage");
-
- if(!code){
-  message.textContent="Entre ton code VIP.";
-  message.className="error";
-  return;
- }
-
- message.textContent="Validation administrative nécessaire. Contacte l'administration.";
- message.className="gold";
+ const msg=document.getElementById("vipMessage");
+ msg.textContent=code?"Validation administrative nécessaire.":"Entre ton code VIP.";
+ msg.className=code?"gold":"error";
 }
 
 checkServer();
 loadMatches();
 </script>
-
 </body>
 </html>
