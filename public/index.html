@@ -1,0 +1,145 @@
+
+    if (!todayMatches.length) {
+      list.textContent = "Aucun match disponible aujourd'hui.";
+      return;
+    }
+
+    todayMatches.forEach((match, index) => {
+      list.appendChild(createMatchCard(match, index));
+    });
+  } catch (error) {
+    list.textContent = "Erreur : " + error.message;
+  }
+}
+
+function showAnalysis(index) {
+  const match = matches[index];
+
+  if (!match) return;
+
+  selectedMatch = match;
+
+  const result = document.getElementById("analysisResult");
+  result.innerHTML = "";
+
+  const title = document.createElement("h3");
+  title.className = "gold";
+  title.textContent =
+    `${match.homeTeam?.name || "Domicile"} - ${match.awayTeam?.name || "Extérieur"}`;
+
+  const competition = document.createElement("p");
+  competition.textContent =
+    "Compétition : " + (match.competition?.name || "Non disponible");
+
+  const date = document.createElement("p");
+  date.textContent = "Date : " + formatDate(match.utcDate);
+
+  const status = document.createElement("p");
+  status.textContent = "Statut : " + (match.status || "Inconnu");
+
+  const warning = document.createElement("p");
+  warning.className = "muted";
+  warning.textContent =
+    "Les compositions, statistiques et probabilités ne sont pas fournies par cette route. Aucune prédiction n'est inventée.";
+
+  const details = document.createElement("button");
+  details.className = "button";
+  details.textContent = "Voir les détails du match";
+
+  details.onclick = async () => {
+    try {
+      const data = await apiGet("/api/matches/" + match.id);
+      const info = document.createElement("pre");
+      info.style.whiteSpace = "pre-wrap";
+      info.style.color = "#d6ad45";
+      info.textContent = JSON.stringify(data.match || data, null, 2);
+      result.appendChild(info);
+    } catch (error) {
+      alert("Erreur : " + error.message);
+    }
+  };
+
+  result.append(title, competition, date, status, warning, details);
+  showPage("analysis");
+}
+
+async function loadHistory() {
+  const list = document.getElementById("historyList");
+  list.textContent = "Chargement des résultats...";
+
+  try {
+    const data = await apiGet("/api/matches?status=FINISHED");
+
+    const finished = (data.matches || []).filter(
+      match => match.status === "FINISHED"
+    );
+
+    list.innerHTML = "";
+
+    if (!finished.length) {
+      list.textContent = "Aucun résultat terminé disponible.";
+      return;
+    }
+
+    finished.forEach(match => {
+      const item = document.createElement("div");
+      item.className = "match";
+
+      const title = document.createElement("h3");
+      title.textContent =
+        `${match.homeTeam?.name || "Domicile"} - ${match.awayTeam?.name || "Extérieur"}`;
+
+      const score = document.createElement("p");
+      score.className = "result";
+
+      const goals = match.score?.fullTime;
+      score.textContent = goals
+        ? `${goals.home ?? "-"} - ${goals.away ?? "-"}`
+        : "Score non disponible";
+
+      item.append(title, score);
+      list.appendChild(item);
+    });
+  } catch (error) {
+    list.textContent = "Erreur : " + error.message;
+  }
+}
+
+function sendVipRequest() {
+  const name = document.getElementById("vipName").value.trim();
+  const phone = document.getElementById("vipPhone").value.trim();
+  const plan = document.getElementById("vipPlan").value;
+
+  if (!name || !phone) {
+    alert("Remplis ton nom et ton numéro de téléphone.");
+    return;
+  }
+
+  const message =
+    `Bonjour, je souhaite demander un abonnement DRABO73 VIP PRONOS.\nNom : ${name}\nTéléphone : ${phone}\nAbonnement : ${plan}`;
+
+  const whatsappNumber = "";
+
+  if (!whatsappNumber) {
+    alert("Le numéro WhatsApp de l'administrateur doit être configuré avant l'envoi.");
+    return;
+  }
+
+  window.open(
+    "https://wa.me/" + whatsappNumber +
+    "?text=" + encodeURIComponent(message),
+    "_blank"
+  );
+}
+
+async function refreshAll() {
+  await Promise.all([
+    checkConnection(),
+    loadMatches(),
+    loadToday()
+  ]);
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+  refreshAll();
+});
