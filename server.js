@@ -16,10 +16,7 @@ const API_BASE = "https://api.football-data.org/v4";
 
 app.use(express.json());
 
-// ===============================
-// CONFIGURATION CORS
-// ===============================
-
+// CORS
 app.use((req, res, next) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
@@ -29,17 +26,11 @@ app.use((req, res, next) => {
   );
   res.setHeader("Cache-Control", "no-store");
 
-  if (req.method === "OPTIONS") {
-    return res.sendStatus(204);
-  }
-
+  if (req.method === "OPTIONS") return res.sendStatus(204);
   next();
 });
 
-// ===============================
-// CLÉ FOOTBALL DATA
-// ===============================
-
+// CLÉ API
 function getToken() {
   const token = (
     process.env.FOOTBALL_DATA_API_KEY ||
@@ -55,10 +46,7 @@ function getToken() {
   return token;
 }
 
-// ===============================
-// DATE DU BURKINA FASO
-// ===============================
-
+// DATE BURKINA FASO
 function getBurkinaDate() {
   const parts = new Intl.DateTimeFormat("en-GB", {
     timeZone: "Africa/Ouagadougou",
@@ -68,35 +56,23 @@ function getBurkinaDate() {
   }).formatToParts(new Date());
 
   const values = {};
-
-  for (const part of parts) {
-    values[part.type] = part.value;
-  }
+  for (const part of parts) values[part.type] = part.value;
 
   return `${values.year}-${values.month}-${values.day}`;
 }
 
-// ===============================
 // AJOUTER DES JOURS
-// ===============================
-
 function addDays(date, days) {
   const result = new Date(date + "T00:00:00Z");
   result.setUTCDate(result.getUTCDate() + days);
   return result.toISOString().slice(0, 10);
 }
 
-// ===============================
-// VÉRIFIER LES DATES
-// ===============================
-
+// VALIDATION DATE
 function validDate(value) {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(value || "")) {
-    return false;
-  }
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value || "")) return false;
 
   const date = new Date(value + "T00:00:00Z");
-
   return !Number.isNaN(date.getTime()) &&
     date.toISOString().slice(0, 10) === value;
 }
@@ -108,10 +84,7 @@ function daysBetween(first, last) {
   );
 }
 
-// ===============================
 // REQUÊTE FOOTBALL DATA
-// ===============================
-
 async function footballRequest(endpoint, req, res, options = {}) {
   const token = getToken();
 
@@ -124,15 +97,12 @@ async function footballRequest(endpoint, req, res, options = {}) {
   }
 
   const controller = new AbortController();
-
-  const timer = setTimeout(() => {
-    controller.abort();
-  }, 20000);
+  const timer = setTimeout(() => controller.abort(), 20000);
 
   try {
     const url = new URL(API_BASE + endpoint);
 
-    // Paramètres de recherche
+    // Paramètres complémentaires
     for (const [key, value] of Object.entries(req.query || {})) {
       if (
         typeof value === "string" &&
@@ -145,23 +115,18 @@ async function footballRequest(endpoint, req, res, options = {}) {
     // MATCHS DU JOUR
     if (options.today) {
       const today = getBurkinaDate();
-
       url.searchParams.set("dateFrom", today);
       url.searchParams.set("dateTo", today);
     }
 
-    // MATCHS À VENIR
-    // Maximum 10 jours inclusifs
+    // MATCHS DES 10 PROCHAINS JOURS
     if (options.upcoming) {
       const today = getBurkinaDate();
-      const lastDay = addDays(today, 9);
-
       url.searchParams.set("dateFrom", today);
-      url.searchParams.set("dateTo", lastDay);
+      url.searchParams.set("dateTo", addDays(today, 9));
     }
 
     // PÉRIODE PERSONNALISÉE
-    // MAXIMUM 10 JOURS
     if (options.customPeriod) {
       const from = req.query.dateFrom || getBurkinaDate();
       const to = req.query.dateTo || from;
@@ -196,7 +161,6 @@ async function footballRequest(endpoint, req, res, options = {}) {
     });
 
     const responseText = await response.text();
-
     let body;
 
     try {
@@ -208,11 +172,7 @@ async function footballRequest(endpoint, req, res, options = {}) {
     }
 
     if (!response.ok) {
-      console.error(
-        "Football API error:",
-        response.status,
-        body
-      );
+      console.error("Football API error:", response.status, body);
 
       return res.status(response.status).json({
         status: "ERROR",
@@ -253,10 +213,7 @@ async function footballRequest(endpoint, req, res, options = {}) {
   }
 }
 
-// ===============================
-// ÉTAT DU SERVEUR
-// ===============================
-
+// SANTÉ DU SERVEUR
 app.get("/health", (req, res) => {
   res.json({
     status: "OK",
@@ -265,49 +222,40 @@ app.get("/health", (req, res) => {
   });
 });
 
-// ===============================
-// ÉTAT DE L'API
-// ===============================
-
+// ÉTAT API
 app.get("/api/status", (req, res) => {
   const configured = Boolean(getToken());
 
   res.json({
     status: "OK",
     application: "DRABO73 VIP PRONOS",
-    api_connection: configured
-      ? "TOKEN_CONFIGURED"
-      : "NOT_CONFIGURED",
+    api_connection: configured ? "TOKEN_CONFIGURED" : "NOT_CONFIGURED",
     tokenConfigured: configured,
     serverDate: getBurkinaDate()
   });
 });
 
-// ===============================
-// MATCHS DU JOUR
-// ===============================
-
+// MATCHS DU JOUR OU PÉRIODE PERSONNALISÉE
 app.get("/api/matches", (req, res) => {
+  if (req.query.dateFrom || req.query.dateTo) {
+    return footballRequest("/matches", req, res, {
+      customPeriod: true
+    });
+  }
+
   return footballRequest("/matches", req, res, {
     today: true
   });
 });
 
-// ===============================
 // MATCHS À VENIR
-// ===============================
-
 app.get("/api/matches/upcoming", (req, res) => {
   return footballRequest("/matches", req, res, {
     upcoming: true
   });
 });
 
-// ===============================
-// HISTORIQUE DES RÉSULTATS RÉELS
-// MAXIMUM 10 JOURS
-// ===============================
-
+// HISTORIQUE
 app.get("/api/matches/history", (req, res) => {
   const today = getBurkinaDate();
 
@@ -329,21 +277,14 @@ app.get("/api/matches/history", (req, res) => {
   });
 });
 
-// ===============================
 // PÉRIODE PERSONNALISÉE
-// MAXIMUM 10 JOURS
-// ===============================
-
 app.get("/api/matches/period", (req, res) => {
   return footballRequest("/matches", req, res, {
     customPeriod: true
   });
 });
 
-// ===============================
-// DÉTAILS D'UN MATCH
-// ===============================
-
+// DÉTAILS MATCH
 app.get("/api/matches/:id", (req, res) => {
   const id = String(req.params.id).replace(/^fd-/i, "");
 
@@ -357,10 +298,7 @@ app.get("/api/matches/:id", (req, res) => {
   return footballRequest(`/matches/${id}`, req, res);
 });
 
-// ===============================
 // CONFRONTATIONS DIRECTES
-// ===============================
-
 app.get("/api/matches/:id/head2head", (req, res) => {
   const id = String(req.params.id).replace(/^fd-/i, "");
 
@@ -374,18 +312,12 @@ app.get("/api/matches/:id/head2head", (req, res) => {
   return footballRequest(`/matches/${id}/head2head`, req, res);
 });
 
-// ===============================
 // COMPÉTITIONS
-// ===============================
-
 app.get("/api/competitions", (req, res) => {
   return footballRequest("/competitions", req, res);
 });
 
-// ===============================
-// MATCHS D'UNE COMPÉTITION
-// ===============================
-
+// MATCHS COMPÉTITION
 app.get("/api/competitions/:id/matches", (req, res) => {
   const id = req.params.id;
 
@@ -399,10 +331,7 @@ app.get("/api/competitions/:id/matches", (req, res) => {
   return footballRequest(`/competitions/${id}/matches`, req, res);
 });
 
-// ===============================
-// CLASSEMENT
-// ===============================
-
+// CLASSEMENTS
 app.get("/api/competitions/:id/standings", (req, res) => {
   const id = req.params.id;
 
@@ -416,10 +345,7 @@ app.get("/api/competitions/:id/standings", (req, res) => {
   return footballRequest(`/competitions/${id}/standings`, req, res);
 });
 
-// ===============================
-// DOSSIERS DU SITE
-// ===============================
-
+// DOSSIERS SITE
 const publicDir = path.join(__dirname, "public");
 const distDir = path.join(__dirname, "dist");
 
@@ -431,10 +357,7 @@ if (fs.existsSync(distDir)) {
   app.use(express.static(distDir));
 }
 
-// ===============================
 // PAGE PRINCIPALE
-// ===============================
-
 app.get("/", (req, res) => {
   const candidates = [
     path.join(publicDir, "index.html"),
@@ -442,9 +365,7 @@ app.get("/", (req, res) => {
     path.join(__dirname, "index.html")
   ];
 
-  const indexFile = candidates.find(file =>
-    fs.existsSync(file)
-  );
+  const indexFile = candidates.find(file => fs.existsSync(file));
 
   if (!indexFile) {
     return res.status(404).send(
@@ -455,10 +376,7 @@ app.get("/", (req, res) => {
   res.sendFile(indexFile);
 });
 
-// ===============================
 // API INCONNUE
-// ===============================
-
 app.use("/api", (req, res) => {
   res.status(404).json({
     status: "ERROR",
@@ -466,18 +384,12 @@ app.use("/api", (req, res) => {
   });
 });
 
-// ===============================
 // PAGE INCONNUE
-// ===============================
-
 app.use((req, res) => {
   res.status(404).send("Page introuvable.");
 });
 
-// ===============================
 // DÉMARRAGE
-// ===============================
-
 app.listen(PORT, "0.0.0.0", () => {
   console.log(
     `[DRABO73 VIP PRONOS] Serveur actif sur le port ${PORT}`
