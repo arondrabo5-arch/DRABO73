@@ -82,6 +82,7 @@ function verifyOwnerToken(token) {
 
 function getBearerToken(req) {
   const authorization = String(req.headers.authorization || "");
+
   return authorization.startsWith("Bearer ")
     ? authorization.slice(7)
     : "";
@@ -120,7 +121,9 @@ function getBurkinaDate() {
   const values = {};
 
   for (const part of parts) {
-    if (part.type !== "literal") values[part.type] = part.value;
+    if (part.type !== "literal") {
+      values[part.type] = part.value;
+    }
   }
 
   return `${values.year}-${values.month}-${values.day}`;
@@ -133,7 +136,9 @@ function addDays(dateString, amount) {
 }
 
 function validDate(value) {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(value || ""))) return false;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(value || ""))) {
+    return false;
+  }
 
   const date = new Date(`${value}T00:00:00Z`);
 
@@ -153,7 +158,9 @@ function validatePeriod(from, to, maximum = MAX_PERIOD_DAYS) {
     return "Dates invalides. Format attendu : YYYY-MM-DD.";
   }
 
-  if (from > to) return "La date de début doit précéder la date de fin.";
+  if (from > to) {
+    return "La date de début doit précéder la date de fin.";
+  }
 
   if (daysBetween(from, to) > maximum) {
     return `La période ne doit pas dépasser ${maximum} jours.`;
@@ -224,6 +231,7 @@ async function footballRequest(endpoint, query = {}) {
       const error = new Error(
         data.message || data.error || "Erreur football-data.org."
       );
+
       error.status = response.status;
       throw error;
     }
@@ -275,12 +283,17 @@ async function fetchMatchesInPeriod(endpoint, from, to, extra = {}) {
       dateTo: end
     });
 
-    if (Array.isArray(data.matches)) matches.push(...data.matches);
+    if (Array.isArray(data.matches)) {
+      matches.push(...data.matches);
+    }
 
     cursor = addDays(end, 1);
   }
 
-  const unique = [...new Map(matches.map(m => [m.id, m])).values()];
+  const unique = [...new Map(
+    matches.map(match => [match.id, match])
+  ).values()];
+
   return sortMatches(unique);
 }
 
@@ -301,7 +314,10 @@ function calculateTeamStats(teamId, matches) {
     const homeScore = match.score?.fullTime?.home;
     const awayScore = match.score?.fullTime?.away;
 
-    if (!Number.isInteger(homeScore) || !Number.isInteger(awayScore)) {
+    if (
+      !Number.isInteger(homeScore) ||
+      !Number.isInteger(awayScore)
+    ) {
       continue;
     }
 
@@ -337,8 +353,12 @@ function calculateTeamStats(teamId, matches) {
     losses,
     goalsFor,
     goalsAgainst,
-    goalsForAverage: played ? Number((goalsFor / played).toFixed(2)) : null,
-    goalsAgainstAverage: played ? Number((goalsAgainst / played).toFixed(2)) : null,
+    goalsForAverage: played
+      ? Number((goalsFor / played).toFixed(2))
+      : null,
+    goalsAgainstAverage: played
+      ? Number((goalsAgainst / played).toFixed(2))
+      : null,
     cleanSheets,
     failedToScore,
     dataSource: "Scores officiels football-data.org"
@@ -353,9 +373,15 @@ async function getRecentTeamMatches(teamId) {
 
   let periodEnd = today;
 
-  while (periodEnd >= oldestDate && allMatches.size < HISTORY_TARGET) {
+  while (
+    periodEnd >= oldestDate &&
+    allMatches.size < HISTORY_TARGET
+  ) {
     let periodStart = addDays(periodEnd, -9);
-    if (periodStart < oldestDate) periodStart = oldestDate;
+
+    if (periodStart < oldestDate) {
+      periodStart = oldestDate;
+    }
 
     const data = await footballRequest(`/teams/${teamId}/matches`, {
       status: "FINISHED",
@@ -365,7 +391,9 @@ async function getRecentTeamMatches(teamId) {
     });
 
     for (const match of data.matches || []) {
-      if (match.id) allMatches.set(match.id, match);
+      if (match.id) {
+        allMatches.set(match.id, match);
+      }
     }
 
     periodEnd = addDays(periodStart, -1);
@@ -391,7 +419,9 @@ async function getRecentTeamMatches(teamId) {
 function poisson(lambda, goals) {
   let factorial = 1;
 
-  for (let i = 2; i <= goals; i++) factorial *= i;
+  for (let i = 2; i <= goals; i++) {
+    factorial *= i;
+  }
 
   return Math.exp(-lambda) * Math.pow(lambda, goals) / factorial;
 }
@@ -400,14 +430,16 @@ function calculatePrediction(homeStats, awayStats) {
   const homeLambda = Math.max(
     0.15,
     Math.min(4.5, (
-      homeStats.goalsForAverage + awayStats.goalsAgainstAverage
+      homeStats.goalsForAverage +
+      awayStats.goalsAgainstAverage
     ) / 2)
   );
 
   const awayLambda = Math.max(
     0.15,
     Math.min(4.5, (
-      awayStats.goalsForAverage + homeStats.goalsAgainstAverage
+      awayStats.goalsForAverage +
+      homeStats.goalsAgainstAverage
     ) / 2)
   );
 
@@ -418,9 +450,14 @@ function calculatePrediction(homeStats, awayStats) {
 
   for (let h = 0; h <= 6; h++) {
     for (let a = 0; a <= 6; a++) {
-      const probability = poisson(homeLambda, h) * poisson(awayLambda, a);
+      const probability =
+        poisson(homeLambda, h) * poisson(awayLambda, a);
 
-      scores.push({ home: h, away: a, probability });
+      scores.push({
+        home: h,
+        away: a,
+        probability
+      });
 
       if (h > a) homeWin += probability;
       else if (h === a) draw += probability;
@@ -429,6 +466,7 @@ function calculatePrediction(homeStats, awayStats) {
   }
 
   const total = homeWin + draw + awayWin;
+
   homeWin /= total;
   draw /= total;
   awayWin /= total;
@@ -438,7 +476,9 @@ function calculatePrediction(homeStats, awayStats) {
     .slice(0, 3)
     .map(score => ({
       score: `${score.home}-${score.away}`,
-      probability: Number((score.probability / total * 100).toFixed(1))
+      probability: Number(
+        (score.probability / total * 100).toFixed(1)
+      )
     }));
 
   return {
@@ -450,8 +490,12 @@ function calculatePrediction(homeStats, awayStats) {
       homeWin: Number((homeWin * 100).toFixed(1)),
       draw: Number((draw * 100).toFixed(1)),
       awayWin: Number((awayWin * 100).toFixed(1)),
-      doubleChance1X: Number(((homeWin + draw) * 100).toFixed(1)),
-      doubleChanceX2: Number(((awayWin + draw) * 100).toFixed(1))
+      doubleChance1X: Number(
+        ((homeWin + draw) * 100).toFixed(1)
+      ),
+      doubleChanceX2: Number(
+        ((awayWin + draw) * 100).toFixed(1)
+      )
     },
     exactScores: sortedScores,
     model: "Modèle statistique de Poisson",
@@ -459,7 +503,7 @@ function calculatePrediction(homeStats, awayStats) {
   };
 }
 
-// Connexion propriétaire : VIP et analyses gratuits pour le propriétaire
+// Connexion propriétaire : VIP et analyses gratuits
 app.post("/api/owner/access", (req, res) => {
   const ip = req.ip || req.socket.remoteAddress || "unknown";
   const now = Date.now();
@@ -552,7 +596,9 @@ app.get("/api/status", (req, res) => {
     status: "OK",
     application: "DRABO73 VIP PRONOS",
     footballDataConfigured: Boolean(getToken()),
-    ownerAccessConfigured: Boolean(OWNER_ACCESS_CODE && OWNER_TOKEN_SECRET),
+    ownerAccessConfigured: Boolean(
+      OWNER_ACCESS_CODE && OWNER_TOKEN_SECRET
+    ),
     footballDataSource: "football-data.org API V4",
     dateBurkina: getBurkinaDate(),
     maximumPeriodDays: MAX_PERIOD_DAYS,
@@ -572,7 +618,10 @@ app.get("/api/matches", async (req, res) => {
   const error = validatePeriod(dateFrom, dateTo);
 
   if (error) {
-    return res.status(400).json({ status: "ERROR", message: error });
+    return res.status(400).json({
+      status: "ERROR",
+      message: error
+    });
   }
 
   return sendFootball(res, "/matches", {
@@ -591,7 +640,10 @@ app.get("/api/matches/upcoming", async (req, res) => {
   const error = validatePeriod(dateFrom, dateTo);
 
   if (error) {
-    return res.status(400).json({ status: "ERROR", message: error });
+    return res.status(400).json({
+      status: "ERROR",
+      message: error
+    });
   }
 
   return sendFootball(res, "/matches", {
@@ -608,10 +660,17 @@ app.get("/api/matches/history", async (req, res) => {
     const dateFrom = req.query.dateFrom || addDays(today, -30);
     const dateTo = req.query.dateTo || today;
 
-    const error = validatePeriod(dateFrom, dateTo, HISTORY_MAX_DAYS);
+    const error = validatePeriod(
+      dateFrom,
+      dateTo,
+      HISTORY_MAX_DAYS
+    );
 
     if (error) {
-      return res.status(400).json({ status: "ERROR", message: error });
+      return res.status(400).json({
+        status: "ERROR",
+        message: error
+      });
     }
 
     const matches = await fetchMatchesInPeriod(
@@ -621,7 +680,9 @@ app.get("/api/matches/history", async (req, res) => {
       { status: "FINISHED" }
     );
 
-    const finished = matches.filter(match => match.status === "FINISHED");
+    const finished = matches.filter(
+      match => match.status === "FINISHED"
+    );
 
     return res.json({
       status: "OK",
@@ -645,7 +706,10 @@ app.get("/api/matches/period", async (req, res) => {
   const error = validatePeriod(dateFrom, dateTo);
 
   if (error) {
-    return res.status(400).json({ status: "ERROR", message: error });
+    return res.status(400).json({
+      status: "ERROR",
+      message: error
+    });
   }
 
   return sendFootball(res, "/matches", {
@@ -763,7 +827,10 @@ app.get("/api/matches/:id/analysis", async (req, res) => {
       });
     }
 
-    const prediction = calculatePrediction(homeStats, awayStats);
+    const prediction = calculatePrediction(
+      homeStats,
+      awayStats
+    );
 
     return res.json({
       ...common,
@@ -788,76 +855,3 @@ app.get("/", (req, res) => {
     slogan: "LA CONFIANCE RESTE",
     message: "Serveur actif",
     source: "football-data.org API V4"
-  });
-});
-
-// Route inconnue
-app.use((req, res) => {
-  return res.status(404).json({
-    status: "ERROR",
-    message: "Route introuvable."
-  });
-});
-
-
- // Gestion des erreurs inattendues
-app.use((error, req, res, next) => {
-  console.error("Erreur serveur :", error);
-
-  if (res.headersSent) {
-    return next(error);
-  }
-
-  return res.status(500).json({
-    status: "ERROR",
-    message: "Erreur interne du serveur."
-  });
-});
-
-// Démarrage du serveur
-app.listen(PORT, "0.0.0.0", () => {
-  console.log(
-    `DRABO73 VIP PRONOS démarré sur le port ${PORT}`
-  );
-});
-
- // Gestion des erreurs inattendues
-app.use((error, req, res, next) => {
-  console.error("Erreur serveur :", error);
-
-  if (res.headersSent) {
-    return next(error);
-  }
-
-  return res.status(500).json({
-    status: "ERROR",
-    message: "Erreur interne du serveur."
-  });
-});
-
-// Démarrage du serveur
-app.listen(PORT, "0.0.0.0", () => {
-  console.log(
-    `DRABO73 VIP PRONOS démarré sur le port ${PORT}`
-  );
-});
- // Gestion des erreurs inattendues
-app.use((error, req, res, next) => {
-  console.error("Erreur serveur :", error);
-
-  if (res.headersSent) {
-    return next(error);
-  }
-
-  return res.status(500).json({
-    status: "ERROR",
-    message: "Erreur interne du serveur."
-  });
-});
-
-// Démarrage du serveur
-app.listen(PORT, "0.0.0.0", () => {
-  console.log(
-    `DRABO73 VIP PRONOS démarré sur le port ${PORT}`
-  );
-});
