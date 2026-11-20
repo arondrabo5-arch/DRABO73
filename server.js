@@ -14,41 +14,31 @@ const app = express();
 const PORT = Number(process.env.PORT) || 3000;
 const API_BASE = "https://api.football-data.org/v4";
 
-app.use(express.json());
+app.use(express.json({ limit: "2mb" }));
+app.use(express.urlencoded({ extended: true }));
 
 // CORS
 app.use((req, res, next) => {
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-  res.setHeader(
-    "Access-Control-Allow-Headers",
-    "Content-Type, Authorization, X-Auth-Token"
-  );
-  res.setHeader("Cache-Control", "no-store");
-
+  res.header("Access-Control-Allow-Origin", "*");
+  res.header("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS");
+  res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
   if (req.method === "OPTIONS") return res.sendStatus(204);
   next();
 });
 
-// CLÉ API
+// Clé API football-data.org
 function getToken() {
-  const token = (
+  return (
     process.env.FOOTBALL_DATA_API_KEY ||
     process.env.FOOTBALL_DATA_API_TOKEN ||
     process.env.FOOTBALL_DATA_TOKEN ||
     ""
-  ).trim().replace(/^['"]|['"]$/g, "");
-
-  if (!token || ["undefined", "null"].includes(token.toLowerCase())) {
-    return null;
-  }
-
-  return token;
+  ).trim();
 }
 
-// DATE BURKINA FASO
+// Date locale Burkina Faso
 function getBurkinaDate() {
-  const parts = new Intl.DateTimeFormat("en-GB", {
+  const parts = new Intl.DateTimeFormat("en-CA", {
     timeZone: "Africa/Ouagadougou",
     year: "numeric",
     month: "2-digit",
@@ -56,100 +46,81 @@ function getBurkinaDate() {
   }).formatToParts(new Date());
 
   const values = {};
-  for (const part of parts) values[part.type] = part.value;
+  for (const part of parts) {
+    if (part.type !== "literal") values[part.type] = part.value;
+  }
 
   return `${values.year}-${values.month}-${values.day}`;
 }
 
-// AJOUTER DES JOURS
-function addDays(date, days) {
-  const result = new Date(date + "T00:00:00Z");
-  result.setUTCDate(result.getUTCDate() + days);
-  return result.toISOString().slice(0, 10);
+function addDays(dateString, amount) {
+  const date = new Date(`${dateString}T12:00:00Z`);
+  date.setUTCDate(date.getUTCDate() + amount);
+  return date.toISOString().slice(0, 10);
 }
 
-// VALIDATION DATE
 function validDate(value) {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(value || "")) return false;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(value || ""))) {
+    return false;
+  }
 
-  const date = new Date(value + "T00:00:00Z");
+  const date = new Date(`${value}T00:00:00Z`);
   return !Number.isNaN(date.getTime()) &&
     date.toISOString().slice(0, 10) === value;
 }
 
-function daysBetween(first, last) {
+function daysBetween(from, to) {
   return Math.round(
-    (Date.parse(last + "T00:00:00Z") -
-     Date.parse(first + "T00:00:00Z")) / 86400000
+    (new Date(`${to}T00:00:00Z`) -
+      new Date(`${from}T00:00:00Z`)) / 86400000
   );
 }
 
-// REQUÊTE FOOTBALL DATA
+function apiErrorMessage(data, fallback) {
+  return data?.message || data?.error || fallback;
+}
+
+// Appel sécurisé de football-data.org
 async function footballRequest(endpoint, req, res, options = {}) {
   const token = getToken();
 
   if (!token) {
     return res.status(503).json({
       status: "ERROR",
-      application: "DRABO73 VIP PRONOS",
-      message: "Clé FOOTBALL_DATA_API_KEY manquante sur Render."
+      message: "Clé API football-data.org non configurée.",
+      requiredEnvironmentVariable: "FOOTBALL_DATA_API_KEY"
     });
   }
 
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 20000);
+  const timeout = setTimeout(() => controller.abort(), 25000);
 
   try {
-    const url = new URL(API_BASE + endpoint);
+    const url = new URL(`${API_BASE}${endpoint}`);
 
-    // Paramètres complémentaires
-    for (const [key, value] of Object.entries(req.query || {})) {
-      if (
-        typeof value === "string" &&
-        !["dateFrom", "dateTo", "date"].includes(key)
-      ) {
-        url.searchParams.set(key, value);
+    const query = { ...req.query };
+
+    if (options.defaultToday) {
+      query.dateFrom = getBurkinaDate();
+      query.dateTo = getBurkinaDate();
+    }
+
+    if (options.defaultUpcoming) {
+      query.dateFrom = getBurkinaDate();
+      query.dateTo = addDays(getBurkinaDate(), 30);
+    }
+
+    if (options.defaultHistory) {
+      query.dateFrom = addDays(getBurkinaDate(), -30);
+      query.dateTo = getBurkinaDate();
+      query.status = "FINISHED";
+    }
+
+    for (const [key, value] of Object.entries(query)) {
+      if (value !== undefined && value !== null && value !== "") {
+        url.searchParams.set(key, String(value));
       }
     }
-
-    // MATCHS DU JOUR
-    if (options.today) {
-      const today = getBurkinaDate();
-      url.searchParams.set("dateFrom", today);
-      url.searchParams.set("dateTo", today);
-    }
-
-    // MATCHS DES 10 PROCHAINS JOURS
-    if (options.upcoming) {
-      const today = getBurkinaDate();
-      url.searchParams.set("dateFrom", today);
-      url.searchParams.set("dateTo", addDays(today, 9));
-    }
-
-    // PÉRIODE PERSONNALISÉE
-    if (options.customPeriod) {
-      const from = req.query.dateFrom || getBurkinaDate();
-      const to = req.query.dateTo || from;
-
-      if (!validDate(from) || !validDate(to)) {
-        return res.status(400).json({
-          status: "ERROR",
-          message: "Format de date invalide. Utilise YYYY-MM-DD."
-        });
-      }
-
-      if (to < from || daysBetween(from, to) > 9) {
-        return res.status(400).json({
-          status: "ERROR",
-          message: "La période ne doit pas dépasser 10 jours."
-        });
-      }
-
-      url.searchParams.set("dateFrom", from);
-      url.searchParams.set("dateTo", to);
-    }
-
-    console.log("[FOOTBALL DATA]", url.pathname, url.search);
 
     const response = await fetch(url.toString(), {
       method: "GET",
@@ -160,242 +131,390 @@ async function footballRequest(endpoint, req, res, options = {}) {
       signal: controller.signal
     });
 
-    const responseText = await response.text();
-    let body;
+    const raw = await response.text();
+    let data = {};
 
     try {
-      body = JSON.parse(responseText);
+      data = raw ? JSON.parse(raw) : {};
     } catch {
-      body = {
-        message: responseText || "Réponse invalide de football-data.org."
-      };
+      data = { message: raw || "Réponse API illisible." };
     }
 
     if (!response.ok) {
-      console.error("Football API error:", response.status, body);
+      console.error("Football-data API error:", response.status, data);
 
       return res.status(response.status).json({
         status: "ERROR",
-        application: "DRABO73 VIP PRONOS",
-        api_connection: "ERROR",
-        httpStatus: response.status,
-        message: body.message || "Erreur football-data.org.",
-        details: body
+        message: apiErrorMessage(data, "Erreur football-data.org."),
+        apiStatus: response.status,
+        details: data
       });
     }
 
     return res.json({
-      ...body,
       status: "OK",
-      application: "DRABO73 VIP PRONOS",
-      api_connection: "CONNECTED",
-      serverDate: getBurkinaDate(),
-      totalMatches: Array.isArray(body.matches)
-        ? body.matches.length
-        : 0
+      source: "football-data.org API V4",
+      ...data
     });
 
   } catch (error) {
-    console.error("Football connection error:", error);
+    console.error("Football request error:", error);
 
     return res.status(502).json({
       status: "ERROR",
-      application: "DRABO73 VIP PRONOS",
-      api_connection: "ERROR",
       message: error.name === "AbortError"
-        ? "Délai de connexion dépassé."
-        : "Impossible de joindre football-data.org.",
+        ? "Délai dépassé lors de la connexion à football-data.org."
+        : "Impossible de contacter football-data.org.",
       details: error.message
     });
 
   } finally {
-    clearTimeout(timer);
+    clearTimeout(timeout);
   }
 }
 
-// SANTÉ DU SERVEUR
+// Accueil / état du serveur
 app.get("/health", (req, res) => {
   res.json({
     status: "OK",
     application: "DRABO73 VIP PRONOS",
-    serverDate: getBurkinaDate()
+    message: "Serveur actif",
+    time: new Date().toISOString()
   });
 });
 
-// ÉTAT API
 app.get("/api/status", (req, res) => {
-  const configured = Boolean(getToken());
-
   res.json({
     status: "OK",
     application: "DRABO73 VIP PRONOS",
-    api_connection: configured ? "TOKEN_CONFIGURED" : "NOT_CONFIGURED",
-    tokenConfigured: configured,
-    serverDate: getBurkinaDate()
+    footballDataConfigured: Boolean(getToken()),
+    footballDataSource: "football-data.org API V4",
+    dateBurkina: getBurkinaDate()
   });
 });
 
-// MATCHS DU JOUR OU PÉRIODE PERSONNALISÉE
-app.get("/api/matches", (req, res) => {
-  if (req.query.dateFrom || req.query.dateTo) {
-    return footballRequest("/matches", req, res, {
-      customPeriod: true
-    });
+// Matchs du jour
+app.get("/api/matches", async (req, res) => {
+  const hasDates = req.query.dateFrom || req.query.dateTo;
+
+  if (hasDates) {
+    return footballRequest("/matches", req, res);
   }
 
   return footballRequest("/matches", req, res, {
-    today: true
+    defaultToday: true
   });
 });
 
-// MATCHS À VENIR
-app.get("/api/matches/upcoming", (req, res) => {
+// Matchs à venir
+app.get("/api/matches/upcoming", async (req, res) => {
   return footballRequest("/matches", req, res, {
-    upcoming: true
+    defaultUpcoming: true
   });
 });
 
-// HISTORIQUE
-app.get("/api/matches/history", (req, res) => {
-  const today = getBurkinaDate();
+// Historique général des matchs terminés
+app.get("/api/matches/history", async (req, res) => {
+  return footballRequest("/matches", req, res, {
+    defaultHistory: true
+  });
+});
 
-  const dateFrom = req.query.dateFrom || addDays(today, -9);
-  const dateTo = req.query.dateTo || today;
+// Matchs sur une période personnalisée
+app.get("/api/matches/period", async (req, res) => {
+  const dateFrom = req.query.dateFrom;
+  const dateTo = req.query.dateTo;
 
-  const historyRequest = {
-    ...req,
-    query: {
-      ...req.query,
-      dateFrom,
-      dateTo,
-      status: "FINISHED"
+  if (!validDate(dateFrom) || !validDate(dateTo)) {
+    return res.status(400).json({
+      status: "ERROR",
+      message: "Dates invalides. Format attendu : YYYY-MM-DD."
+    });
+  }
+
+  if (dateFrom > dateTo) {
+    return res.status(400).json({
+      status: "ERROR",
+      message: "La date de début doit précéder la date de fin."
+    });
+  }
+
+  if (daysBetween(dateFrom, dateTo) > 10) {
+    return res.status(400).json({
+      status: "ERROR",
+      message: "La période ne doit pas dépasser 10 jours."
+    });
+  }
+
+  return footballRequest("/matches", req, res);
+});
+
+// 3 derniers matchs terminés d'une équipe
+app.get("/api/teams/:id/recent-matches", async (req, res) => {
+  const teamId = String(req.params.id);
+
+  if (!/^\d+$/.test(teamId)) {
+    return res.status(400).json({
+      status: "ERROR",
+      message: "Identifiant équipe invalide."
+    });
+  }
+
+  const token = getToken();
+
+  if (!token) {
+    return res.status(503).json({
+      status: "ERROR",
+      message: "Clé API non configurée."
+    });
+  }
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 30000);
+
+  try {
+    const today = getBurkinaDate();
+    const dateFrom = addDays(today, -365);
+    const allMatches = [];
+
+    // Pagination pour récupérer les résultats disponibles
+    let offset = 0;
+    const limit = 100;
+    let total = Infinity;
+
+    while (offset < total && offset < 500) {
+      const url = new URL(
+        `${API_BASE}/teams/${teamId}/matches`
+      );
+
+      url.searchParams.set("status", "FINISHED");
+      url.searchParams.set("dateFrom", dateFrom);
+      url.searchParams.set("dateTo", today);
+      url.searchParams.set("limit", String(limit));
+      url.searchParams.set("offset", String(offset));
+
+      const response = await fetch(url.toString(), {
+        method: "GET",
+        headers: {
+          "X-Auth-Token": token,
+          "Accept": "application/json"
+        },
+        signal: controller.signal
+      });
+
+      const raw = await response.text();
+      let data = {};
+
+      try {
+        data = raw ? JSON.parse(raw) : {};
+      } catch {
+        data = { message: raw };
+      }
+
+      if (!response.ok) {
+        return res.status(response.status).json({
+          status: "ERROR",
+          message: apiErrorMessage(
+            data,
+            "Erreur lors de la récupération de l'historique."
+          ),
+          apiStatus: response.status,
+          teamId: Number(teamId),
+          details: data
+        });
+      }
+
+      const batch = Array.isArray(data.matches) ? data.matches : [];
+      total = Number(data.resultSet?.count ?? batch.length);
+
+      allMatches.push(...batch);
+
+      if (batch.length === 0 || batch.length < limit) break;
+      offset += batch.length;
     }
-  };
 
-  return footballRequest("/matches", historyRequest, res, {
-    customPeriod: true
-  });
+    const matches = allMatches
+      .filter(match => {
+        const homeId = Number(match.homeTeam?.id);
+        const awayId = Number(match.awayTeam?.id);
+
+        const belongsToTeam =
+          homeId === Number(teamId) ||
+          awayId === Number(teamId);
+
+        const homeScore = match.score?.fullTime?.home;
+        const awayScore = match.score?.fullTime?.away;
+
+        const hasRealScore =
+          Number.isInteger(homeScore) &&
+          Number.isInteger(awayScore);
+
+        return (
+          match.status === "FINISHED" &&
+          belongsToTeam &&
+          hasRealScore
+        );
+      })
+      .sort((a, b) =>
+        new Date(b.utcDate).getTime() -
+        new Date(a.utcDate).getTime()
+      )
+      .filter((match, index, array) =>
+        array.findIndex(item => item.id === match.id) === index
+      )
+      .slice(0, 3);
+
+    return res.json({
+      status: "OK",
+      source: "football-data.org API V4",
+      application: "DRABO73 VIP PRONOS",
+      teamId: Number(teamId),
+      total: matches.length,
+      sufficient: matches.length === 3,
+      message: matches.length === 3
+        ? "Les 3 derniers matchs terminés ont été récupérés."
+        : `Seulement ${matches.length} match(s) terminé(s) disponible(s) dans les données accessibles.`,
+      matches
+    });
+
+  } catch (error) {
+    console.error("Recent matches error:", error);
+
+    return res.status(502).json({
+      status: "ERROR",
+      message: error.name === "AbortError"
+        ? "Délai dépassé pendant la récupération de l'historique."
+        : "Impossible de récupérer les derniers matchs.",
+      details: error.message
+    });
+
+  } finally {
+    clearTimeout(timeout);
+  }
 });
 
-// PÉRIODE PERSONNALISÉE
-app.get("/api/matches/period", (req, res) => {
-  return footballRequest("/matches", req, res, {
-    customPeriod: true
-  });
-});
-
-// DÉTAILS MATCH
-app.get("/api/matches/:id", (req, res) => {
-  const id = String(req.params.id).replace(/^fd-/i, "");
-
-  if (!/^\d+$/.test(id)) {
+// Détails d'un match
+app.get("/api/matches/:id", async (req, res) => {
+  if (!/^\d+$/.test(String(req.params.id))) {
     return res.status(400).json({
       status: "ERROR",
       message: "Identifiant de match invalide."
     });
   }
 
-  return footballRequest(`/matches/${id}`, req, res);
+  return footballRequest(`/matches/${req.params.id}`, req, res);
 });
 
-// CONFRONTATIONS DIRECTES
-app.get("/api/matches/:id/head2head", (req, res) => {
-  const id = String(req.params.id).replace(/^fd-/i, "");
-
-  if (!/^\d+$/.test(id)) {
+// Confrontations directes
+app.get("/api/matches/:id/head2head", async (req, res) => {
+  if (!/^\d+$/.test(String(req.params.id))) {
     return res.status(400).json({
       status: "ERROR",
-      message: "Identifiant invalide."
+      message: "Identifiant de match invalide."
     });
   }
 
-  return footballRequest(`/matches/${id}/head2head`, req, res);
+  return footballRequest(
+    `/matches/${req.params.id}/head2head`,
+    req,
+    res
+  );
 });
 
-// COMPÉTITIONS
-app.get("/api/competitions", (req, res) => {
+// Liste des compétitions
+app.get("/api/competitions", async (req, res) => {
   return footballRequest("/competitions", req, res);
 });
 
-// MATCHS COMPÉTITION
-app.get("/api/competitions/:id/matches", (req, res) => {
-  const id = req.params.id;
-
-  if (!/^[A-Za-z0-9_-]+$/.test(id)) {
+// Matchs d'une compétition
+app.get("/api/competitions/:id/matches", async (req, res) => {
+  if (!/^\d+$/.test(String(req.params.id))) {
     return res.status(400).json({
       status: "ERROR",
-      message: "Code de compétition invalide."
+      message: "Identifiant de compétition invalide."
     });
   }
 
-  return footballRequest(`/competitions/${id}/matches`, req, res);
+  return footballRequest(
+    `/competitions/${req.params.id}/matches`,
+    req,
+    res
+  );
 });
 
-// CLASSEMENTS
-app.get("/api/competitions/:id/standings", (req, res) => {
-  const id = req.params.id;
-
-  if (!/^[A-Za-z0-9_-]+$/.test(id)) {
+// Classement d'une compétition
+app.get("/api/competitions/:id/standings", async (req, res) => {
+  if (!/^\d+$/.test(String(req.params.id))) {
     return res.status(400).json({
       status: "ERROR",
-      message: "Code de compétition invalide."
+      message: "Identifiant de compétition invalide."
     });
   }
 
-  return footballRequest(`/competitions/${id}/standings`, req, res);
+  return footballRequest(
+    `/competitions/${req.params.id}/standings`,
+    req,
+    res
+  );
 });
 
-// DOSSIERS SITE
-const publicDir = path.join(__dirname, "public");
-const distDir = path.join(__dirname, "dist");
+// Fichiers statiques de l'application
+const publicPath = path.join(__dirname, "public");
+const distPath = path.join(__dirname, "dist");
 
-if (fs.existsSync(publicDir)) {
-  app.use(express.static(publicDir));
+if (fs.existsSync(publicPath)) {
+  app.use(express.static(publicPath));
 }
 
-if (fs.existsSync(distDir)) {
-  app.use(express.static(distDir));
+if (fs.existsSync(distPath)) {
+  app.use(express.static(distPath));
 }
 
-// PAGE PRINCIPALE
+// Page d'accueil
 app.get("/", (req, res) => {
-  const candidates = [
-    path.join(publicDir, "index.html"),
-    path.join(distDir, "index.html"),
-    path.join(__dirname, "index.html")
-  ];
+  const distIndex = path.join(distPath, "index.html");
+  const publicIndex = path.join(publicPath, "index.html");
 
-  const indexFile = candidates.find(file => fs.existsSync(file));
-
-  if (!indexFile) {
-    return res.status(404).send(
-      "index.html introuvable. Vérifie le dossier public."
-    );
+  if (fs.existsSync(distIndex)) {
+    return res.sendFile(distIndex);
   }
 
-  res.sendFile(indexFile);
-});
+  if (fs.existsSync(publicIndex)) {
+    return res.sendFile(publicIndex);
+  }
 
-// API INCONNUE
-app.use("/api", (req, res) => {
-  res.status(404).json({
-    status: "ERROR",
-    message: "Route API introuvable."
+  return res.json({
+    application: "DRABO73 VIP PRONOS",
+    slogan: "LA CONFIANCE RESTE",
+    status: "Serveur actif"
   });
 });
 
-// PAGE INCONNUE
+// Route inconnue
 app.use((req, res) => {
-  res.status(404).send("Page introuvable.");
+  res.status(404).json({
+    status: "ERROR",
+    message: "Route introuvable.",
+    path: req.originalUrl
+  });
 });
 
-// DÉMARRAGE
-app.listen(PORT, "0.0.0.0", () => {
-  console.log(
-    `[DRABO73 VIP PRONOS] Serveur actif sur le port ${PORT}`
-  );
+// Erreurs serveur
+app.use((error, req, res, next) => {
+  console.error("Server error:", error);
 
-  console.log(
-    `[DRABO73] Clé API configurée : ${Boolean(getToken())}`
-  );
+  res.status(500).json({
+    status: "ERROR",
+    message: "Erreur interne du serveur."
+  });
+});
+
+// Démarrage
+app.listen(PORT, "0.0.0.0", () => {
+  console.log("------------------------------------");
+  console.log("DRABO73 VIP PRONOS");
+  console.log("LA CONFIANCE RESTE");
+  console.log(`Serveur actif sur le port ${PORT}`);
+  console.log(`Football-data API : ${Boolean(getToken()) ? "CONFIGURÉE" : "NON CONFIGURÉE"}`);
+  console.log("------------------------------------");
 });
