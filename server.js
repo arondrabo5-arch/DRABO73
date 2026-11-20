@@ -16,6 +16,9 @@ const PORT = Number(process.env.PORT) || 3000;
 const API_BASE = "https://api.football-data.org/v4";
 const TIMEZONE = "Africa/Ouagadougou";
 const MAX_PERIOD_DAYS = 10;
+const HISTORY_REQUIRED = 3;
+const HISTORY_TARGET = 5;
+const HISTORY_MAX_DAYS = 365;
 
 const OWNER_ACCESS_CODE = process.env.OWNER_ACCESS_CODE || "";
 const OWNER_TOKEN_SECRET = process.env.OWNER_TOKEN_SECRET || "";
@@ -28,12 +31,11 @@ app.use((req, res, next) => {
   res.header("Access-Control-Allow-Origin", "*");
   res.header("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS");
   res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
-
   if (req.method === "OPTIONS") return res.sendStatus(204);
   next();
 });
 
-// Protection basique contre les essais répétés du code propriétaire
+// Limitation des tentatives propriétaire
 const ownerAttempts = new Map();
 
 function createOwnerToken() {
@@ -95,11 +97,10 @@ function requireOwner(req, res, next) {
       message: "Accès propriétaire non valide."
     });
   }
-
   next();
 }
 
-// Clé API football-data.org
+// Clé API
 function getToken() {
   return (
     process.env.FOOTBALL_DATA_API_KEY ||
@@ -109,7 +110,7 @@ function getToken() {
   ).trim();
 }
 
-// Date du Burkina Faso
+// Date Burkina Faso
 function getBurkinaDate() {
   const parts = new Intl.DateTimeFormat("en-CA", {
     timeZone: TIMEZONE,
@@ -119,7 +120,6 @@ function getBurkinaDate() {
   }).formatToParts(new Date());
 
   const values = {};
-
   for (const part of parts) {
     if (part.type !== "literal") values[part.type] = part.value;
   }
@@ -139,7 +139,6 @@ function validDate(value) {
   }
 
   const date = new Date(`${value}T00:00:00Z`);
-
   return !Number.isNaN(date.getTime()) &&
     date.toISOString().slice(0, 10) === value;
 }
@@ -160,15 +159,11 @@ function validatePeriod(from, to) {
     return "La date de début doit précéder la date de fin.";
   }
 
-  if (daysBetween(from, to) >= MAX_PERIOD_DAYS) {
+  if (daysBetween(from, to) > MAX_PERIOD_DAYS) {
     return "La période ne doit pas dépasser 10 jours.";
   }
 
   return null;
-}
-
-function apiErrorMessage(data, fallback) {
-  return data?.message || data?.error || fallback;
 }
 
 function sortMatches(matches) {
@@ -177,13 +172,17 @@ function sortMatches(matches) {
   );
 }
 
-// Appel sécurisé de football-data.org
+function apiErrorMessage(data, fallback) {
+  return data?.message || data?.error || fallback;
+}
+
+// Connexion football-data.org
 async function footballRequest(endpoint, query = {}) {
   const token = getToken();
 
   if (!token) {
     const error = new Error(
-      "Clé API football-data.org non configurée."
+      "Clé API football-data.org non configurée sur Render."
     );
     error.status = 503;
     throw error;
@@ -223,30 +222,28 @@ async function footballRequest(endpoint, query = {}) {
       const error = new Error(
         apiErrorMessage(data, "Erreur football-data.org.")
       );
-
       error.status = response.status;
       error.details = data;
       throw error;
     }
 
     return data;
+
   } catch (error) {
     if (error.name === "AbortError") {
-      const timeoutError = new Error(
-        "Délai dépassé lors de la connexion à football-data.org."
-      );
-      timeoutError.status = 504;
-      throw timeoutError;
+      const e = new Error("Délai de connexion dépassé.");
+      e.status = 504;
+      throw e;
     }
 
     if (error.status) throw error;
 
-    const networkError = new Error(
+    const e = new Error(
       "Impossible de contacter football-data.org."
     );
+    e.status = 502;
+    throw e;
 
-    networkError.status = 502;
-    throw networkError;
   } finally {
     clearTimeout(timeout);
   }
@@ -276,7 +273,7 @@ async function sendFootball(res, endpoint, query = {}) {
   }
 }
 
-// Récupération d'une période par blocs de 10 jours
+// Récupération des matchs par périodes de 10 jours
 async function fetchMatchesInPeriod(endpoint, from, to, extra = {}) {
   const matches = [];
   let cursor = from;
@@ -299,16 +296,80 @@ async function fetchMatchesInPeriod(endpoint, from, to, extra = {}) {
   }
 
   const unique = [
-    ...new Map(matches.map(match => [match.id, match])).values()
+    ...new Map(matches.map(m => [m.id, m])).values()
   ];
 
   return sortMatches(unique);
+}
+
+// Calcul des statistiques à partir des scores officiels
+function calculateTeamStats(teamId, matches) {
+  let played = 0;
+  let wins = 0;
+  let draws = 0;
+  let losses = 0;
+  let goalsFor = 0;
+  let goalsAgainst = 0;
+  let cleanSheets = 0;
+  let failedToScore = 0;
+
+  for (const match of matches) {
+    const homeId = Number(match.homeTeam?.id);
+    const awayId = Number(match.awayTeam?.id);
+
+    const homeScore = match.score?.fullTime?.home;
+    const awayScore = match.score?.fullTime?.away;
+
+    if (!Number.isInteger(homeScore) ||
+        !Number.isInteger(awayScore)) continue;
+
+    let scored;
+    let conceded;
+
+    if (homeId === Number(teamId)) {
+      scored = homeScore;
+      conceded = awayScore;
+    } else if (awayId === Number(teamId)) {
+      scored = awayScore;
+      conceded = homeScore;
+    } else {
+      continue;
+    }
+
+    played++;
+    goalsFor += scored;
+    goalsAgainst += conceded;
+
+    if (scored > conceded) wins++;
+    else if (scored === conceded) draws++;
+    else losses++;
+
+    if (conceded === 0) cleanSheets++;
+    if (scored === 0) failedToScore++;
+  }
+
+  return {
+    played,
+    wins,
+    draws,
+    losses,
+    goalsFor,
+    goalsAgainst,
+    goalsForAverage: played
+      ? Number((goalsFor / played).toFixed(2)) : null,
+    goalsAgainstAverage: played
+      ? Number((goalsAgainst / played).toFixed(2)) : null,
+    cleanSheets,
+    failedToScore,
+    dataSource: "Scores officiels football-data.org"
+  };
 }
 
 // Accès propriétaire
 app.post("/api/owner/access", (req, res) => {
   const ip = req.ip || req.socket.remoteAddress || "unknown";
   const now = Date.now();
+
   const attempts = ownerAttempts.get(ip) || {
     count: 0,
     start: now,
@@ -339,8 +400,7 @@ app.post("/api/owner/access", (req, res) => {
   const supplied = Buffer.from(code);
   const expected = Buffer.from(OWNER_ACCESS_CODE);
 
-  const valid =
-    supplied.length === expected.length &&
+  const valid = supplied.length === expected.length &&
     crypto.timingSafeEqual(supplied, expected);
 
   if (!valid) {
@@ -370,7 +430,7 @@ app.post("/api/owner/access", (req, res) => {
   });
 });
 
-// Vérification du jeton propriétaire
+// Vérification propriétaire
 app.get("/api/owner/verify", requireOwner, (req, res) => {
   return res.json({
     status: "OK",
@@ -380,7 +440,7 @@ app.get("/api/owner/verify", requireOwner, (req, res) => {
   });
 });
 
-// État du serveur
+// Santé serveur
 app.get("/health", (req, res) => {
   res.json({
     status: "OK",
@@ -400,7 +460,9 @@ app.get("/api/status", (req, res) => {
     ),
     footballDataSource: "football-data.org API V4",
     dateBurkina: getBurkinaDate(),
-    maximumPeriodDays: MAX_PERIOD_DAYS
+    maximumPeriodDays: MAX_PERIOD_DAYS,
+    historyRequired: HISTORY_REQUIRED,
+    historyTarget: HISTORY_TARGET
   });
 });
 
@@ -446,22 +508,19 @@ app.get("/api/matches/upcoming", async (req, res) => {
   });
 });
 
-// Historique des matchs terminés
+// Historique global des matchs terminés
 app.get("/api/matches/history", async (req, res) => {
   try {
     const today = getBurkinaDate();
     const dateFrom = req.query.dateFrom || addDays(today, -30);
     const dateTo = req.query.dateTo || today;
 
-    if (req.query.dateFrom || req.query.dateTo) {
-      const error = validatePeriod(dateFrom, dateTo);
-
-      if (error) {
-        return res.status(400).json({
-          status: "ERROR",
-          message: error
-        });
-      }
+    const error = validatePeriod(dateFrom, dateTo);
+    if (error) {
+      return res.status(400).json({
+        status: "ERROR",
+        message: error
+      });
     }
 
     const matches = await fetchMatchesInPeriod(
@@ -472,7 +531,7 @@ app.get("/api/matches/history", async (req, res) => {
     );
 
     const finished = matches.filter(
-      match => match.status === "FINISHED"
+      m => m.status === "FINISHED"
     );
 
     return res.json({
@@ -484,6 +543,7 @@ app.get("/api/matches/history", async (req, res) => {
       dateTo,
       matches: finished
     });
+
   } catch (error) {
     return sendError(res, error);
   }
@@ -509,7 +569,7 @@ app.get("/api/matches/period", async (req, res) => {
   });
 });
 
-// Trois derniers matchs terminés d'une équipe
+// CINQ derniers matchs terminés d'une équipe
 app.get("/api/teams/:id/recent-matches", async (req, res) => {
   const teamId = String(req.params.id);
 
@@ -522,11 +582,16 @@ app.get("/api/teams/:id/recent-matches", async (req, res) => {
 
   try {
     const today = getBurkinaDate();
-    const allMatches = [];
-    let periodEnd = today;
-    const oldestDate = addDays(today, -90);
+    const oldestDate = addDays(today, -HISTORY_MAX_DAYS);
+    const allMatches = new Map();
 
-    while (periodEnd >= oldestDate && allMatches.length < 3) {
+    let periodEnd = today;
+
+    // Recherche progressive jusqu'à 5 matchs ou 365 jours
+    while (
+      periodEnd >= oldestDate &&
+      allMatches.size < HISTORY_TARGET
+    ) {
       let periodStart = addDays(periodEnd, -9);
 
       if (periodStart < oldestDate) {
@@ -543,21 +608,20 @@ app.get("/api/teams/:id/recent-matches", async (req, res) => {
         }
       );
 
-      if (Array.isArray(data.matches)) {
-        allMatches.push(...data.matches);
+      for (const match of (data.matches || [])) {
+        if (match.id) {
+          allMatches.set(match.id, match);
+        }
       }
 
       periodEnd = addDays(periodStart, -1);
     }
 
-    const unique = [
-      ...new Map(allMatches.map(match => [match.id, match])).values()
-    ];
-
-    const matches = unique
+    const matches = [...allMatches.values()]
       .filter(match => {
         const homeId = Number(match.homeTeam?.id);
         const awayId = Number(match.awayTeam?.id);
+
         const belongs =
           homeId === Number(teamId) ||
           awayId === Number(teamId);
@@ -570,8 +634,13 @@ app.get("/api/teams/:id/recent-matches", async (req, res) => {
           Number.isInteger(homeScore) &&
           Number.isInteger(awayScore);
       })
-      .sort((a, b) => new Date(b.utcDate) - new Date(a.utcDate))
-      .slice(0, 3);
+      .sort((a, b) =>
+        new Date(b.utcDate) - new Date(a.utcDate)
+      )
+      .slice(0, HISTORY_TARGET);
+
+    const statistics = calculateTeamStats(teamId, matches);
+    const sufficient = matches.length >= HISTORY_REQUIRED;
 
     return res.json({
       status: "OK",
@@ -579,12 +648,16 @@ app.get("/api/teams/:id/recent-matches", async (req, res) => {
       application: "DRABO73 VIP PRONOS",
       teamId: Number(teamId),
       total: matches.length,
-      sufficient: matches.length === 3,
-      message: matches.length === 3
-        ? "Les trois derniers matchs terminés ont été récupérés."
-        : `Seulement ${matches.length} match(s) avec score disponible sur les 90 derniers jours.`,
+      minimumRequired: HISTORY_REQUIRED,
+      target: HISTORY_TARGET,
+      sufficient,
+      statistics,
+      message: sufficient
+        ? "Historique récupéré. Analyse statistique possible."
+        : `Historique insuffisant : ${matches.length} match(s) terminé(s) avec score disponible.`,
       matches
     });
+
   } catch (error) {
     return sendError(res, error);
   }
@@ -652,7 +725,7 @@ app.get("/api/competitions/:id/matches", async (req, res) => {
   );
 });
 
-// Classement d'une compétition
+// Classement
 app.get("/api/competitions/:id/standings", async (req, res) => {
   if (!/^\d+$/.test(String(req.params.id))) {
     return res.status(400).json({
@@ -680,7 +753,7 @@ if (fs.existsSync(distPath)) {
   app.use(express.static(distPath));
 }
 
-// Page d'accueil
+// Accueil
 app.get("/", (req, res) => {
   const distIndex = path.join(distPath, "index.html");
   const publicIndex = path.join(publicPath, "index.html");
@@ -734,8 +807,7 @@ app.listen(PORT, "0.0.0.0", () => {
   console.log(
     `Accès propriétaire : ${
       OWNER_ACCESS_CODE && OWNER_TOKEN_SECRET
-        ? "CONFIGURÉ"
-        : "NON CONFIGURÉ"
+        ? "CONFIGURÉ" : "NON CONFIGURÉ"
     }`
   );
   console.log("------------------------------------");
