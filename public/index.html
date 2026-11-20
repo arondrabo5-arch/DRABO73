@@ -62,8 +62,9 @@ footer{text-align:center;padding:20px;color:#999;border-top:1px solid #444}
 </div>
 <div class="card">
 <p>Matchs disponibles : <strong id="matchCount">0</strong></p>
+<p>Résultats historiques : <strong id="historyCount">0</strong></p>
 <p id="connectionStatus">Connexion au serveur...</p>
-<button class="action" onclick="loadMatches()">Actualiser les matchs</button>
+<button class="action" onclick="refreshData()">Actualiser les données</button>
 </div>
 <h2>Rencontres disponibles</h2>
 <div id="homeMatches">Chargement...</div>
@@ -112,6 +113,7 @@ footer{text-align:center;padding:20px;color:#999;border-top:1px solid #444}
 <button class="action" onclick="checkServer()">Tester la connexion</button>
 </div>
 </section>
+
 </main>
 
 <footer>
@@ -122,11 +124,15 @@ footer{text-align:center;padding:20px;color:#999;border-top:1px solid #444}
 
 <script>
 const API_BASE="https://drabo73-vip-pronos-2026-bf.onrender.com";
+
 let matches=[];
+let historyMatches=[];
+let historyLoaded=false;
 
 function showPage(page){
  document.querySelectorAll("main section").forEach(s=>s.classList.remove("active"));
  document.getElementById(page).classList.add("active");
+
  if(page==="matches")renderMatches("matchesList");
  if(page==="history")loadHistory();
  if(page==="settings")checkServer();
@@ -135,14 +141,24 @@ function showPage(page){
 async function apiRequest(endpoint){
  const response=await fetch(API_BASE+endpoint);
  let data;
- try{data=await response.json()}catch(e){throw new Error("Réponse invalide")}
- if(!response.ok||data.status==="ERROR")throw new Error(data.message||"Erreur "+response.status);
+
+ try{
+  data=await response.json();
+ }catch(e){
+  throw new Error("Réponse invalide du serveur");
+ }
+
+ if(!response.ok||data.status==="ERROR"){
+  throw new Error(data.message||"Erreur "+response.status);
+ }
+
  return data;
 }
 
 async function checkServer(){
  try{
   await apiRequest("/api/status");
+
   document.getElementById("serverStatus").textContent="Serveur connecté.";
   document.getElementById("connectionStatus").textContent="Serveur connecté.";
   document.getElementById("serverStatus").className="success";
@@ -156,10 +172,13 @@ async function checkServer(){
 async function loadMatches(){
  document.getElementById("homeMatches").textContent="Chargement...";
  document.getElementById("matchesList").textContent="Chargement...";
+
  try{
   const data=await apiRequest("/api/matches/upcoming");
   matches=Array.isArray(data.matches)?data.matches:[];
+
   document.getElementById("matchCount").textContent=matches.length;
+
   renderMatches("homeMatches");
   renderMatches("matchesList");
  }catch(e){
@@ -168,40 +187,103 @@ async function loadMatches(){
  }
 }
 
+async function loadHistoryData(){
+ historyLoaded=false;
+
+ try{
+  const data=await apiRequest("/api/matches/history");
+
+  historyMatches=Array.isArray(data.matches)?data.matches:[];
+
+  historyMatches=historyMatches.filter(m=>
+   m.status==="FINISHED" &&
+   m.score?.fullTime?.home!=null &&
+   m.score?.fullTime?.away!=null
+  );
+
+  historyLoaded=true;
+
+  document.getElementById("historyCount").textContent=historyMatches.length;
+
+  return true;
+ }catch(e){
+  historyMatches=[];
+  historyLoaded=false;
+  console.error("Erreur historique :",e.message);
+  return false;
+ }
+}
+
+async function refreshData(){
+ document.getElementById("connectionStatus").textContent="Actualisation en cours...";
+
+ await Promise.all([
+  checkServer(),
+  loadMatches(),
+  loadHistoryData()
+ ]);
+
+ renderMatches("homeMatches");
+ renderMatches("matchesList");
+ loadHistory();
+
+ if(historyLoaded){
+  document.getElementById("connectionStatus").textContent=
+   "Serveur connecté • "+historyMatches.length+" résultats historiques chargés.";
+ }
+}
+
 function renderMatches(id){
  const list=document.getElementById(id);
  list.innerHTML="";
- if(!matches.length){list.textContent="Aucun match disponible.";return}
+
+ if(!matches.length){
+  list.textContent="Aucun match disponible.";
+  return;
+ }
+
  matches.forEach((m,i)=>list.appendChild(createMatchCard(m,i)));
 }
 
 function createMatchCard(m,i){
  const card=document.createElement("div");
  card.className="card";
+
  const p=document.createElement("p");
  p.className="small";
  p.textContent=m.competition?.name||"Compétition";
+
  const date=document.createElement("p");
  date.className="date";
- date.textContent=m.utcDate?new Date(m.utcDate).toLocaleString("fr-FR",{timeZone:"Africa/Ouagadougou"}):"Date inconnue";
+ date.textContent=m.utcDate?
+  new Date(m.utcDate).toLocaleString("fr-FR",{timeZone:"Africa/Ouagadougou"}):
+  "Date inconnue";
+
  const teams=document.createElement("div");
  teams.className="team";
  teams.textContent=(m.homeTeam?.name||"Domicile")+" VS "+(m.awayTeam?.name||"Extérieur");
+
  const state=document.createElement("p");
  state.className="small";
  state.textContent="Statut : "+(m.status||"Inconnu");
+
  const b=document.createElement("button");
  b.className="action";
  b.textContent="Voir l'analyse";
  b.onclick=()=>showAnalysis(i);
+
  card.append(p,date,teams,state,b);
  return card;
 }
 
-/* Calculs mathématiques de Poisson */
+/* Calcul de Poisson */
 function poisson(lambda,k){
  let fact=1;
- for(let i=1;i<=k;i++)fact*=i;
+
+ for(let i=1;i<=k;i++){
+  fact*=i;
+ }
+
  return Math.exp(-lambda)*Math.pow(lambda,k)/fact;
 }
 
@@ -209,36 +291,54 @@ function calculatePrediction(match){
  const homeId=match.homeTeam?.id;
  const awayId=match.awayTeam?.id;
 
- const previous=matches.filter(m=>
+ if(!historyLoaded){
+  return {
+   available:false,
+   message:"Historique non chargé. Actualise les données et réessaie."
+  };
+ }
+
+ if(homeId==null||awayId==null){
+  return {
+   available:false,
+   message:"Identifiants des équipes indisponibles."
+  };
+ }
+
+ const previous=historyMatches.filter(m=>
   m.status==="FINISHED" &&
   m.score?.fullTime?.home!=null &&
-  m.score?.fullTime?.away!=null &&
-  (m.homeTeam?.id===homeId||m.awayTeam?.id===homeId||
-   m.homeTeam?.id===awayId||m.awayTeam?.id===awayId)
+  m.score?.fullTime?.away!=null
  );
 
  const homeGames=previous.filter(m=>
   m.homeTeam?.id===homeId||m.awayTeam?.id===homeId
- );
+ ).sort((a,b)=>new Date(b.utcDate)-new Date(a.utcDate)).slice(0,5);
+
  const awayGames=previous.filter(m=>
   m.homeTeam?.id===awayId||m.awayTeam?.id===awayId
- );
+ ).sort((a,b)=>new Date(b.utcDate)-new Date(a.utcDate)).slice(0,5);
 
  if(homeGames.length<3||awayGames.length<3){
-  return {available:false,message:"Historique insuffisant : au moins 3 matchs terminés par équipe sont nécessaires."};
+  return {
+   available:false,
+   message:"Historique insuffisant : "+homeGames.length+
+    " matchs trouvés pour l'équipe domicile et "+
+    awayGames.length+" pour l'équipe extérieure. Il faut au moins 3 matchs terminés par équipe."
+  };
  }
 
  function averageScored(games,id){
   return games.reduce((sum,m)=>{
-   const h=m.homeTeam?.id===id;
-   return sum+(h?m.score.fullTime.home:m.score.fullTime.away);
+   const isHome=m.homeTeam?.id===id;
+   return sum+(isHome?m.score.fullTime.home:m.score.fullTime.away);
   },0)/games.length;
  }
 
  function averageConceded(games,id){
   return games.reduce((sum,m)=>{
-   const h=m.homeTeam?.id===id;
-   return sum+(h?m.score.fullTime.away:m.score.fullTime.home);
+   const isHome=m.homeTeam?.id===id;
+   return sum+(isHome?m.score.fullTime.away:m.score.fullTime.home);
   },0)/games.length;
  }
 
@@ -256,15 +356,21 @@ function calculatePrediction(match){
  for(let x=0;x<=6;x++){
   for(let y=0;y<=6;y++){
    const probability=poisson(lambdaHome,x)*poisson(lambdaAway,y);
+
    total+=probability;
+
    if(x>y)h+=probability;
    else if(x===y)d+=probability;
    else a+=probability;
+
    scores.push({home:x,away:y,p:probability});
   }
  }
 
  scores.sort((x,y)=>y.p-x.p);
+
+ const over25=scores.reduce((sum,s)=>
+  sum+(s.home+s.away>2?s.p:0),0)/total;
 
  return {
   available:true,
@@ -273,17 +379,24 @@ function calculatePrediction(match){
   home:h/total,
   draw:d/total,
   away:a/total,
-  over25:scores.reduce((s,v)=>s+(v.home+v.away>2?v.p:0),0)/total,
+  over25,
   scores:scores.slice(0,3),
-  homeAttack,homeDefense,awayAttack,awayDefense,
-  sample:homeGames.length+awayGames.length
+  homeAttack,
+  homeDefense,
+  awayAttack,
+  awayDefense,
+  homeSample:homeGames.length,
+  awaySample:awayGames.length
  };
 }
 
-function pct(v){return (v*100).toFixed(1)+" %"}
+function pct(v){
+ return (v*100).toFixed(1)+" %";
+}
 
 function showAnalysis(index){
  const m=matches[index];
+
  if(!m)return;
 
  const box=document.getElementById("analysisContent");
@@ -310,24 +423,30 @@ function showAnalysis(index){
   warning.className="error";
   warning.textContent=prediction.message;
   box.appendChild(warning);
+
   const note=document.createElement("p");
   note.textContent="Les pronostics automatiques ne sont pas affichés sans données historiques suffisantes.";
   box.appendChild(note);
  }else{
   addText(box,"Buts estimés domicile",prediction.lambdaHome.toFixed(2));
   addText(box,"Buts estimés extérieur",prediction.lambdaAway.toFixed(2));
+
   addText(box,"Attaque domicile",prediction.homeAttack.toFixed(2)+" buts par match");
   addText(box,"Défense domicile",prediction.homeDefense.toFixed(2)+" buts encaissés par match");
+
   addText(box,"Attaque extérieur",prediction.awayAttack.toFixed(2)+" buts par match");
   addText(box,"Défense extérieur",prediction.awayDefense.toFixed(2)+" buts encaissés par match");
 
   box.appendChild(document.createElement("hr"));
+
   addText(box,"Victoire domicile",pct(prediction.home));
   addText(box,"Match nul",pct(prediction.draw));
   addText(box,"Victoire extérieur",pct(prediction.away));
+
   addText(box,"Double chance 1X",pct(prediction.home+prediction.draw));
   addText(box,"Double chance X2",pct(prediction.away+prediction.draw));
   addText(box,"Double chance 12",pct(prediction.home+prediction.away));
+
   addText(box,"Plus de 2,5 buts",pct(prediction.over25));
   addText(box,"Moins de 2,5 buts",pct(1-prediction.over25));
 
@@ -343,13 +462,15 @@ function showAnalysis(index){
    box.appendChild(span);
   });
 
-  addText(box,"Historique utilisé",prediction.sample+" apparitions cumulées");
-  addText(box,"Corners","Données indisponibles");
-  addText(box,"Possession et tirs","Données indisponibles");
+  addText(box,"Historique domicile",prediction.homeSample+" matchs");
+  addText(box,"Historique extérieur",prediction.awaySample+" matchs");
+
+  addText(box,"Corners","Données indisponibles dans la source utilisée");
+  addText(box,"Possession et tirs","Données indisponibles dans la source utilisée");
 
   const caution=document.createElement("p");
   caution.className="small";
-  caution.textContent="Estimations Poisson basées uniquement sur les matchs terminés présents dans la liste chargée. Elles ne sont pas des garanties et peuvent être biaisées par un échantillon limité.";
+  caution.textContent="Estimations Poisson calculées à partir des derniers résultats disponibles. Les statistiques manquantes ne sont pas inventées. Ces estimations ne sont pas des garanties.";
   box.appendChild(caution);
  }
 
@@ -359,7 +480,14 @@ function showAnalysis(index){
  box.appendChild(result);
 
  const score=m.score?.fullTime;
- addText(box,"Score",score?.home!=null&&score?.away!=null?score.home+" - "+score.away:"Pas encore disponible");
+
+ addText(
+  box,
+  "Score",
+  score?.home!=null&&score?.away!=null?
+   score.home+" - "+score.away:
+   "Pas encore disponible"
+ );
 
  showPage("analysis");
 }
@@ -373,31 +501,62 @@ function addText(box,label,value){
 function loadHistory(){
  const box=document.getElementById("historyList");
  box.innerHTML="";
- const completed=matches.filter(m=>
-  m.status==="FINISHED"&&
-  m.score?.fullTime?.home!=null&&
-  m.score?.fullTime?.away!=null
- );
- if(!completed.length){
-  box.textContent="Aucun résultat terminé disponible dans les matchs chargés.";
+
+ if(!historyLoaded){
+  box.textContent="Historique indisponible. Vérifie la connexion et actualise les données.";
   return;
  }
- completed.forEach(m=>{
-  const p=document.createElement("p");
-  p.textContent=(m.homeTeam?.name||"Domicile")+" "+m.score.fullTime.home+" - "+m.score.fullTime.away+" "+(m.awayTeam?.name||"Extérieur");
-  box.appendChild(p);
- });
+
+ if(!historyMatches.length){
+  box.textContent="Aucun résultat terminé disponible.";
+  return;
+ }
+
+ historyMatches
+  .slice()
+  .sort((a,b)=>new Date(b.utcDate)-new Date(a.utcDate))
+  .forEach(m=>{
+   const p=document.createElement("p");
+
+   p.textContent=
+    (m.homeTeam?.name||"Domicile")+" "+
+    m.score.fullTime.home+" - "+
+    m.score.fullTime.away+" "+
+    (m.awayTeam?.name||"Extérieur");
+
+   box.appendChild(p);
+  });
 }
 
 function checkVIP(){
  const code=document.getElementById("vipCode").value.trim();
  const msg=document.getElementById("vipMessage");
- msg.textContent=code?"Validation administrative nécessaire.":"Entre ton code VIP.";
+
+ msg.textContent=code?
+  "Validation administrative nécessaire.":
+  "Entre ton code VIP.";
+
  msg.className=code?"gold":"error";
 }
 
-checkServer();
-loadMatches();
+/* Démarrage : charger les données avant utilisation */
+async function initializeApp(){
+ await Promise.all([
+  checkServer(),
+  loadMatches(),
+  loadHistoryData()
+ ]);
+
+ loadHistory();
+
+ if(historyLoaded){
+  document.getElementById("connectionStatus").textContent=
+   "Connecté • "+matches.length+" matchs à venir • "+
+   historyMatches.length+" résultats historiques.";
+ }
+}
+
+initializeApp();
 </script>
 </body>
 </html>
