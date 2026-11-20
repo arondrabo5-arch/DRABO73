@@ -799,12 +799,65 @@ app.use((req, res) => {
   });
 });
 
-// Gestion des erreurs inattendues
+
+ // Gestion des erreurs inattendues
 app.use((error, req, res, next) => {
   console.error("Erreur serveur :", error);
 
-  if (res.headersSent) return next(error);
+  if (res.headersSent) {
+    return next(error);
+  }
 
   return res.status(500).json({
     status: "ERROR",
-    message: "Une
+    message: "Erreur interne du serveur."
+  });
+});
+
+// Démarrage du serveur
+app.listen(PORT, "0.0.0.0", () => {
+  console.log(
+    `DRABO73 VIP PRONOS démarré sur le port ${PORT}`
+  );
+});
+
+ // Gestion des erreurs inattendues
+app.use((error, req, res, next) => {
+  console.error("Erreur serveur :", error);
+
+  if (res.headersSent) {
+    return next(error);
+  }
+
+  return res.status(500).json({
+    status: "ERROR",
+    message: "Erreur interne du serveur."
+  });
+});
+
+// Démarrage du serveur
+app.listen(PORT, "0.0.0.0", () => {
+  console.log(
+    `DRABO73 VIP PRONOS démarré sur le port ${PORT}`
+  );
+});
+ // Gestion des erreurs inattendues
+app.use((error, req, res, next) => {
+  console.error("Erreur serveur :", error);
+
+  if (res.headersSent) {
+    return next(error);
+  }
+
+  return res.status(500).json({
+    status: "ERROR",
+    message: "Erreur interne du serveur."
+  });
+});
+
+// Démarrage du serveur
+app.listen(PORT, "0.0.0.0", () => {
+  console.log(
+    `DRABO73 VIP PRONOS démarré sur le port ${PORT}`
+  );
+});
