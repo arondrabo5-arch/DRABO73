@@ -917,6 +917,5 @@ app.get(
         });
       }
 
-      const prediction = calculatePrediction(
-        homeStats,
-        awayStats
+      // CORRECTION : fermeture correcte de calculatePrediction
+      const predic
