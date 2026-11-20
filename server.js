@@ -2,6 +2,7 @@
 import express from "express";
 import path from "path";
 import fs from "fs";
+import crypto from "crypto";
 import { fileURLToPath } from "url";
 import dotenv from "dotenv";
 
@@ -16,6 +17,9 @@ const API_BASE = "https://api.football-data.org/v4";
 const TIMEZONE = "Africa/Ouagadougou";
 const MAX_PERIOD_DAYS = 10;
 
+const OWNER_ACCESS_CODE = process.env.OWNER_ACCESS_CODE || "";
+const OWNER_TOKEN_SECRET = process.env.OWNER_TOKEN_SECRET || "";
+
 app.use(express.json({ limit: "2mb" }));
 app.use(express.urlencoded({ extended: true }));
 
@@ -25,14 +29,77 @@ app.use((req, res, next) => {
   res.header("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS");
   res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
 
-  if (req.method === "OPTIONS") {
-    return res.sendStatus(204);
-  }
-
+  if (req.method === "OPTIONS") return res.sendStatus(204);
   next();
 });
 
-// Clé API
+// Protection basique contre les essais répétés du code propriétaire
+const ownerAttempts = new Map();
+
+function createOwnerToken() {
+  const payload = Buffer.from(JSON.stringify({
+    role: "owner",
+    exp: Date.now() + 30 * 24 * 60 * 60 * 1000
+  })).toString("base64url");
+
+  const signature = crypto
+    .createHmac("sha256", OWNER_TOKEN_SECRET)
+    .update(payload)
+    .digest("base64url");
+
+  return payload + "." + signature;
+}
+
+function verifyOwnerToken(token) {
+  if (!token || !OWNER_TOKEN_SECRET) return false;
+
+  const parts = token.split(".");
+  if (parts.length !== 2) return false;
+
+  const [payload, signature] = parts;
+
+  const expected = crypto
+    .createHmac("sha256", OWNER_TOKEN_SECRET)
+    .update(payload)
+    .digest("base64url");
+
+  const a = Buffer.from(signature);
+  const b = Buffer.from(expected);
+
+  if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) {
+    return false;
+  }
+
+  try {
+    const data = JSON.parse(
+      Buffer.from(payload, "base64url").toString()
+    );
+
+    return data.role === "owner" && data.exp > Date.now();
+  } catch {
+    return false;
+  }
+}
+
+function getBearerToken(req) {
+  const authorization = String(req.headers.authorization || "");
+  return authorization.startsWith("Bearer ")
+    ? authorization.slice(7)
+    : "";
+}
+
+function requireOwner(req, res, next) {
+  if (!verifyOwnerToken(getBearerToken(req))) {
+    return res.status(401).json({
+      status: "ERROR",
+      message: "Accès propriétaire non valide."
+    });
+  }
+
+  next();
+}
+
+// Clé API football-data.org
 function getToken() {
   return (
     process.env.FOOTBALL_DATA_API_KEY ||
@@ -54,9 +121,7 @@ function getBurkinaDate() {
   const values = {};
 
   for (const part of parts) {
-    if (part.type !== "literal") {
-      values[part.type] = part.value;
-    }
+    if (part.type !== "literal") values[part.type] = part.value;
   }
 
   return `${values.year}-${values.month}-${values.day}`;
@@ -75,10 +140,8 @@ function validDate(value) {
 
   const date = new Date(`${value}T00:00:00Z`);
 
-  return (
-    !Number.isNaN(date.getTime()) &&
-    date.toISOString().slice(0, 10) === value
-  );
+  return !Number.isNaN(date.getTime()) &&
+    date.toISOString().slice(0, 10) === value;
 }
 
 function daysBetween(from, to) {
@@ -97,7 +160,6 @@ function validatePeriod(from, to) {
     return "La date de début doit précéder la date de fin.";
   }
 
-  // Maximum 10 jours calendaires inclus
   if (daysBetween(from, to) >= MAX_PERIOD_DAYS) {
     return "La période ne doit pas dépasser 10 jours.";
   }
@@ -168,7 +230,6 @@ async function footballRequest(endpoint, query = {}) {
     }
 
     return data;
-
   } catch (error) {
     if (error.name === "AbortError") {
       const timeoutError = new Error(
@@ -186,21 +247,18 @@ async function footballRequest(endpoint, query = {}) {
 
     networkError.status = 502;
     throw networkError;
-
   } finally {
     clearTimeout(timeout);
   }
 }
 
-// Réponse API uniforme
 function sendError(res, error) {
   console.error("API error:", error);
 
   return res.status(error.status || 500).json({
     status: "ERROR",
     message: error.message || "Erreur interne du serveur.",
-    apiStatus: error.status || 500,
-    details: error.details || undefined
+    apiStatus: error.status || 500
   });
 }
 
@@ -213,16 +271,14 @@ async function sendFootball(res, endpoint, query = {}) {
       source: "football-data.org API V4",
       ...data
     });
-
   } catch (error) {
     return sendError(res, error);
   }
 }
 
-// Récupération d'une période par blocs de 10 jours maximum
+// Récupération d'une période par blocs de 10 jours
 async function fetchMatchesInPeriod(endpoint, from, to, extra = {}) {
   const matches = [];
-
   let cursor = from;
 
   while (cursor <= to) {
@@ -242,13 +298,87 @@ async function fetchMatchesInPeriod(endpoint, from, to, extra = {}) {
     cursor = addDays(end, 1);
   }
 
-  // Supprimer les doublons
   const unique = [
     ...new Map(matches.map(match => [match.id, match])).values()
   ];
 
   return sortMatches(unique);
 }
+
+// Accès propriétaire
+app.post("/api/owner/access", (req, res) => {
+  const ip = req.ip || req.socket.remoteAddress || "unknown";
+  const now = Date.now();
+  const attempts = ownerAttempts.get(ip) || {
+    count: 0,
+    start: now,
+    blockedUntil: 0
+  };
+
+  if (attempts.blockedUntil > now) {
+    return res.status(429).json({
+      status: "ERROR",
+      message: "Trop de tentatives. Réessaie plus tard."
+    });
+  }
+
+  if (now - attempts.start > 15 * 60 * 1000) {
+    attempts.count = 0;
+    attempts.start = now;
+    attempts.blockedUntil = 0;
+  }
+
+  if (!OWNER_ACCESS_CODE || !OWNER_TOKEN_SECRET) {
+    return res.status(503).json({
+      status: "ERROR",
+      message: "Accès propriétaire non configuré sur Render."
+    });
+  }
+
+  const code = String(req.body?.code || "");
+  const supplied = Buffer.from(code);
+  const expected = Buffer.from(OWNER_ACCESS_CODE);
+
+  const valid =
+    supplied.length === expected.length &&
+    crypto.timingSafeEqual(supplied, expected);
+
+  if (!valid) {
+    attempts.count++;
+
+    if (attempts.count >= 5) {
+      attempts.blockedUntil = now + 15 * 60 * 1000;
+    }
+
+    ownerAttempts.set(ip, attempts);
+
+    return res.status(401).json({
+      status: "ERROR",
+      message: "Code propriétaire incorrect."
+    });
+  }
+
+  ownerAttempts.delete(ip);
+
+  return res.json({
+    status: "OK",
+    role: "owner",
+    token: createOwnerToken(),
+    vip: true,
+    analysis: true,
+    message: "Accès propriétaire activé."
+  });
+});
+
+// Vérification du jeton propriétaire
+app.get("/api/owner/verify", requireOwner, (req, res) => {
+  return res.json({
+    status: "OK",
+    role: "owner",
+    vip: true,
+    analysis: true
+  });
+});
 
 // État du serveur
 app.get("/health", (req, res) => {
@@ -265,6 +395,9 @@ app.get("/api/status", (req, res) => {
     status: "OK",
     application: "DRABO73 VIP PRONOS",
     footballDataConfigured: Boolean(getToken()),
+    ownerAccessConfigured: Boolean(
+      OWNER_ACCESS_CODE && OWNER_TOKEN_SECRET
+    ),
     footballDataSource: "football-data.org API V4",
     dateBurkina: getBurkinaDate(),
     maximumPeriodDays: MAX_PERIOD_DAYS
@@ -274,10 +407,8 @@ app.get("/api/status", (req, res) => {
 // Matchs du jour
 app.get("/api/matches", async (req, res) => {
   const today = getBurkinaDate();
-
   const dateFrom = req.query.dateFrom || today;
   const dateTo = req.query.dateTo || today;
-
   const error = validatePeriod(dateFrom, dateTo);
 
   if (error) {
@@ -294,13 +425,11 @@ app.get("/api/matches", async (req, res) => {
   });
 });
 
-// Matchs à venir : 10 jours maximum
+// Matchs à venir
 app.get("/api/matches/upcoming", async (req, res) => {
   const today = getBurkinaDate();
-
   const dateFrom = req.query.dateFrom || today;
   const dateTo = req.query.dateTo || addDays(today, 9);
-
   const error = validatePeriod(dateFrom, dateTo);
 
   if (error) {
@@ -317,7 +446,7 @@ app.get("/api/matches/upcoming", async (req, res) => {
   });
 });
 
-// Historique des matchs terminés : 30 derniers jours
+// Historique des matchs terminés
 app.get("/api/matches/history", async (req, res) => {
   try {
     const today = getBurkinaDate();
@@ -355,17 +484,15 @@ app.get("/api/matches/history", async (req, res) => {
       dateTo,
       matches: finished
     });
-
   } catch (error) {
     return sendError(res, error);
   }
 });
 
-// Période personnalisée, maximum 10 jours
+// Période personnalisée
 app.get("/api/matches/period", async (req, res) => {
   const dateFrom = req.query.dateFrom;
   const dateTo = req.query.dateTo;
-
   const error = validatePeriod(dateFrom, dateTo);
 
   if (error) {
@@ -396,9 +523,6 @@ app.get("/api/teams/:id/recent-matches", async (req, res) => {
   try {
     const today = getBurkinaDate();
     const allMatches = [];
-
-    // Recherche par périodes successives de 10 jours.
-    // Arrêt dès que trois résultats réels sont trouvés.
     let periodEnd = today;
     const oldestDate = addDays(today, -90);
 
@@ -434,24 +558,19 @@ app.get("/api/teams/:id/recent-matches", async (req, res) => {
       .filter(match => {
         const homeId = Number(match.homeTeam?.id);
         const awayId = Number(match.awayTeam?.id);
-
-        const belongsToTeam =
+        const belongs =
           homeId === Number(teamId) ||
           awayId === Number(teamId);
 
         const homeScore = match.score?.fullTime?.home;
         const awayScore = match.score?.fullTime?.away;
 
-        return (
-          match.status === "FINISHED" &&
-          belongsToTeam &&
+        return match.status === "FINISHED" &&
+          belongs &&
           Number.isInteger(homeScore) &&
-          Number.isInteger(awayScore)
-        );
+          Number.isInteger(awayScore);
       })
-      .sort(
-        (a, b) => new Date(b.utcDate) - new Date(a.utcDate)
-      )
+      .sort((a, b) => new Date(b.utcDate) - new Date(a.utcDate))
       .slice(0, 3);
 
     return res.json({
@@ -466,7 +585,6 @@ app.get("/api/teams/:id/recent-matches", async (req, res) => {
         : `Seulement ${matches.length} match(s) avec score disponible sur les 90 derniers jours.`,
       matches
     });
-
   } catch (error) {
     return sendError(res, error);
   }
@@ -517,10 +635,7 @@ app.get("/api/competitions/:id/matches", async (req, res) => {
   const query = { ...req.query };
 
   if (query.dateFrom || query.dateTo) {
-    const error = validatePeriod(
-      query.dateFrom,
-      query.dateTo
-    );
+    const error = validatePeriod(query.dateFrom, query.dateTo);
 
     if (error) {
       return res.status(400).json({
@@ -599,9 +714,7 @@ app.use((req, res) => {
 app.use((error, req, res, next) => {
   console.error("Server error:", error);
 
-  if (res.headersSent) {
-    return next(error);
-  }
+  if (res.headersSent) return next(error);
 
   res.status(500).json({
     status: "ERROR",
@@ -617,6 +730,13 @@ app.listen(PORT, "0.0.0.0", () => {
   console.log(`Serveur actif sur le port ${PORT}`);
   console.log(
     `Football-data API : ${getToken() ? "CONFIGURÉE" : "NON CONFIGURÉE"}`
+  );
+  console.log(
+    `Accès propriétaire : ${
+      OWNER_ACCESS_CODE && OWNER_TOKEN_SECRET
+        ? "CONFIGURÉ"
+        : "NON CONFIGURÉ"
+    }`
   );
   console.log("------------------------------------");
 });
