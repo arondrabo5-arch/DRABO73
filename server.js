@@ -32,7 +32,7 @@ app.use((req, res, next) => {
   next();
 });
 
-// Protection des tentatives propriétaire
+// Protection propriétaire
 const ownerAttempts = new Map();
 
 function createOwnerToken() {
@@ -99,7 +99,7 @@ function requireOwner(req, res, next) {
   next();
 }
 
-// Clé football-data.org
+// Clé API football-data.org
 function getToken() {
   return (
     process.env.FOOTBALL_DATA_API_KEY ||
@@ -185,7 +185,7 @@ function sendError(res, error) {
   });
 }
 
-// Connexion à football-data.org
+// Connexion football-data.org
 async function footballRequest(endpoint, query = {}) {
   const token = getToken();
 
@@ -267,7 +267,7 @@ async function sendFootball(res, endpoint, query = {}) {
   }
 }
 
-// Recherche découpée en périodes de 10 jours
+// Recherche par périodes de 10 jours
 async function fetchMatchesInPeriod(endpoint, from, to, extra = {}) {
   const matches = [];
   let cursor = from;
@@ -296,7 +296,7 @@ async function fetchMatchesInPeriod(endpoint, from, to, extra = {}) {
   return sortMatches(unique);
 }
 
-// Statistiques officielles d'une équipe
+// Statistiques d'une équipe
 function calculateTeamStats(teamId, matches) {
   let played = 0;
   let wins = 0;
@@ -316,9 +316,7 @@ function calculateTeamStats(teamId, matches) {
     if (
       !Number.isInteger(homeScore) ||
       !Number.isInteger(awayScore)
-    ) {
-      continue;
-    }
+    ) continue;
 
     let scored;
     let conceded;
@@ -364,7 +362,7 @@ function calculateTeamStats(teamId, matches) {
   };
 }
 
-// Derniers matchs terminés d'une équipe
+// Cinq derniers matchs terminés
 async function getRecentTeamMatches(teamId) {
   const today = getBurkinaDate();
   const oldestDate = addDays(today, -HISTORY_MAX_DAYS);
@@ -390,9 +388,7 @@ async function getRecentTeamMatches(teamId) {
     });
 
     for (const match of data.matches || []) {
-      if (match.id) {
-        allMatches.set(match.id, match);
-      }
+      if (match.id) allMatches.set(match.id, match);
     }
 
     periodEnd = addDays(periodStart, -1);
@@ -414,7 +410,7 @@ async function getRecentTeamMatches(teamId) {
     .slice(0, HISTORY_TARGET);
 }
 
-// Modèle de Poisson
+// Modèle statistique de Poisson
 function poisson(lambda, goals) {
   let factorial = 1;
 
@@ -452,11 +448,7 @@ function calculatePrediction(homeStats, awayStats) {
       const probability =
         poisson(homeLambda, h) * poisson(awayLambda, a);
 
-      scores.push({
-        home: h,
-        away: a,
-        probability
-      });
+      scores.push({ home: h, away: a, probability });
 
       if (h > a) homeWin += probability;
       else if (h === a) draw += probability;
@@ -502,7 +494,7 @@ function calculatePrediction(homeStats, awayStats) {
   };
 }
 
-// Connexion propriétaire : VIP et analyses gratuits
+// Accès propriétaire gratuit
 app.post("/api/owner/access", (req, res) => {
   const ip = req.ip || req.socket.remoteAddress || "unknown";
   const now = Date.now();
@@ -608,7 +600,7 @@ app.get("/api/status", (req, res) => {
   });
 });
 
-// Matchs du jour ou dates demandées
+// Matchs du jour et dates demandées
 app.get("/api/matches", async (req, res) => {
   const today = getBurkinaDate();
   const dateFrom = req.query.dateFrom || today;
@@ -652,7 +644,7 @@ app.get("/api/matches/upcoming", async (req, res) => {
   });
 });
 
-// Historique global des résultats officiels
+// Historique global des résultats
 app.get("/api/matches/history", async (req, res) => {
   try {
     const today = getBurkinaDate();
@@ -854,4 +846,11 @@ app.get("/", (req, res) => {
     slogan: "LA CONFIANCE RESTE",
     message: "Serveur actif",
     source: "football-data.org API V4"
- 
+  });
+});
+
+// Route inconnue
+app.use((req, res) => {
+  return res.status(404).json({
+    status: "ERROR",
+    message: "Route
