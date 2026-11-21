@@ -231,7 +231,6 @@ async function footballRequest(endpoint, query = {}) {
       const error = new Error(
         data.message || data.error || "Erreur football-data.org."
       );
-
       error.status = response.status;
       throw error;
     }
@@ -855,3 +854,4 @@ app.get("/", (req, res) => {
     slogan: "LA CONFIANCE RESTE",
     message: "Serveur actif",
     source: "football-data.org API V4"
+ 
