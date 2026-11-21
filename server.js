@@ -99,7 +99,7 @@ function requireOwner(req, res, next) {
   next();
 }
 
-// Clé API football-data.org
+// Clé API
 function getToken() {
   return (
     process.env.FOOTBALL_DATA_API_KEY ||
@@ -109,7 +109,7 @@ function getToken() {
   ).trim();
 }
 
-// Date du Burkina Faso
+// Date Burkina Faso
 function getBurkinaDate() {
   const parts = new Intl.DateTimeFormat("en-CA", {
     timeZone: TIMEZONE,
@@ -267,7 +267,7 @@ async function sendFootball(res, endpoint, query = {}) {
   }
 }
 
-// Recherche par périodes de 10 jours
+// Recherche par périodes
 async function fetchMatchesInPeriod(endpoint, from, to, extra = {}) {
   const matches = [];
   let cursor = from;
@@ -296,7 +296,7 @@ async function fetchMatchesInPeriod(endpoint, from, to, extra = {}) {
   return sortMatches(unique);
 }
 
-// Statistiques d'une équipe
+// Statistiques équipe
 function calculateTeamStats(teamId, matches) {
   let played = 0;
   let wins = 0;
@@ -410,7 +410,7 @@ async function getRecentTeamMatches(teamId) {
     .slice(0, HISTORY_TARGET);
 }
 
-// Modèle statistique de Poisson
+// Modèle de Poisson
 function poisson(lambda, goals) {
   let factorial = 1;
 
@@ -571,7 +571,7 @@ app.get("/api/owner/verify", requireOwner, (req, res) => {
   });
 });
 
-// Santé du serveur
+// Santé serveur
 app.get("/health", (req, res) => {
   return res.json({
     status: "OK",
@@ -600,7 +600,7 @@ app.get("/api/status", (req, res) => {
   });
 });
 
-// Matchs du jour et dates demandées
+// Matchs du jour
 app.get("/api/matches", async (req, res) => {
   const today = getBurkinaDate();
   const dateFrom = req.query.dateFrom || today;
@@ -644,7 +644,7 @@ app.get("/api/matches/upcoming", async (req, res) => {
   });
 });
 
-// Historique global des résultats
+// Historique global
 app.get("/api/matches/history", async (req, res) => {
   try {
     const today = getBurkinaDate();
@@ -710,7 +710,7 @@ app.get("/api/matches/period", async (req, res) => {
   });
 });
 
-// Cinq derniers matchs d'une équipe
+// Cinq derniers matchs équipe
 app.get("/api/teams/:id/recent-matches", async (req, res) => {
   const teamId = String(req.params.id);
 
@@ -745,7 +745,7 @@ app.get("/api/teams/:id/recent-matches", async (req, res) => {
   }
 });
 
-// Analyse automatique d'un match
+// Analyse automatique
 app.get("/api/matches/:id/analysis", async (req, res) => {
   const matchId = String(req.params.id);
 
@@ -853,4 +853,10 @@ app.get("/", (req, res) => {
 app.use((req, res) => {
   return res.status(404).json({
     status: "ERROR",
-    message: "Route
+    message: "Route introuvable.",
+    path: req.originalUrl
+  });
+});
+
+// Gestion des erreurs
+app.use((error, req, res, ne
