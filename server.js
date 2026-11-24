@@ -32,7 +32,7 @@ app.use((req, res, next) => {
   next();
 });
 
-// Protection propriétaire
+// PROTECTION PROPRIETAIRE
 const ownerAttempts = new Map();
 
 function createOwnerToken() {
@@ -99,7 +99,7 @@ function requireOwner(req, res, next) {
   next();
 }
 
-// Clé API
+// CLE API FOOTBALL
 function getToken() {
   return (
     process.env.FOOTBALL_DATA_API_KEY ||
@@ -109,7 +109,7 @@ function getToken() {
   ).trim();
 }
 
-// Date Burkina Faso
+// DATE BURKINA FASO
 function getBurkinaDate() {
   const parts = new Intl.DateTimeFormat("en-CA", {
     timeZone: TIMEZONE,
@@ -185,7 +185,7 @@ function sendError(res, error) {
   });
 }
 
-// Connexion football-data.org
+// CONNEXION FOOTBALL-DATA.ORG
 async function footballRequest(endpoint, query = {}) {
   const token = getToken();
 
@@ -267,7 +267,7 @@ async function sendFootball(res, endpoint, query = {}) {
   }
 }
 
-// Recherche par périodes
+// RECHERCHE PAR PERIODES
 async function fetchMatchesInPeriod(endpoint, from, to, extra = {}) {
   const matches = [];
   let cursor = from;
@@ -296,7 +296,7 @@ async function fetchMatchesInPeriod(endpoint, from, to, extra = {}) {
   return sortMatches(unique);
 }
 
-// Statistiques équipe
+// STATISTIQUES EQUIPE
 function calculateTeamStats(teamId, matches) {
   let played = 0;
   let wins = 0;
@@ -362,7 +362,7 @@ function calculateTeamStats(teamId, matches) {
   };
 }
 
-// Cinq derniers matchs terminés
+// CINQ DERNIERS MATCHS TERMINES
 async function getRecentTeamMatches(teamId) {
   const today = getBurkinaDate();
   const oldestDate = addDays(today, -HISTORY_MAX_DAYS);
@@ -410,7 +410,7 @@ async function getRecentTeamMatches(teamId) {
     .slice(0, HISTORY_TARGET);
 }
 
-// Modèle de Poisson
+// MODELE DE POISSON
 function poisson(lambda, goals) {
   let factorial = 1;
 
@@ -494,7 +494,7 @@ function calculatePrediction(homeStats, awayStats) {
   };
 }
 
-// Accès propriétaire gratuit
+// ACCES PROPRIETAIRE GRATUIT
 app.post("/api/owner/access", (req, res) => {
   const ip = req.ip || req.socket.remoteAddress || "unknown";
   const now = Date.now();
@@ -571,7 +571,7 @@ app.get("/api/owner/verify", requireOwner, (req, res) => {
   });
 });
 
-// Santé serveur
+// SANTE SERVEUR
 app.get("/health", (req, res) => {
   return res.json({
     status: "OK",
@@ -581,7 +581,7 @@ app.get("/health", (req, res) => {
   });
 });
 
-// État des connexions
+// ETAT DES CONNEXIONS
 app.get("/api/status", (req, res) => {
   return res.json({
     status: "OK",
@@ -600,7 +600,7 @@ app.get("/api/status", (req, res) => {
   });
 });
 
-// Matchs du jour
+// MATCHS DU JOUR
 app.get("/api/matches", async (req, res) => {
   const today = getBurkinaDate();
   const dateFrom = req.query.dateFrom || today;
@@ -622,7 +622,7 @@ app.get("/api/matches", async (req, res) => {
   });
 });
 
-// Matchs à venir
+// MATCHS A VENIR
 app.get("/api/matches/upcoming", async (req, res) => {
   const today = getBurkinaDate();
   const dateFrom = req.query.dateFrom || today;
@@ -644,7 +644,7 @@ app.get("/api/matches/upcoming", async (req, res) => {
   });
 });
 
-// Historique global
+// HISTORIQUE GLOBAL
 app.get("/api/matches/history", async (req, res) => {
   try {
     const today = getBurkinaDate();
@@ -689,7 +689,7 @@ app.get("/api/matches/history", async (req, res) => {
   }
 });
 
-// Période personnalisée
+// PERIODE PERSONNALISEE
 app.get("/api/matches/period", async (req, res) => {
   const dateFrom = req.query.dateFrom;
   const dateTo = req.query.dateTo;
@@ -710,7 +710,7 @@ app.get("/api/matches/period", async (req, res) => {
   });
 });
 
-// Cinq derniers matchs équipe
+// CINQ DERNIERS MATCHS EQUIPE
 app.get("/api/teams/:id/recent-matches", async (req, res) => {
   const teamId = String(req.params.id);
 
@@ -745,7 +745,7 @@ app.get("/api/teams/:id/recent-matches", async (req, res) => {
   }
 });
 
-// Analyse automatique
+// ANALYSE AUTOMATIQUE
 app.get("/api/matches/:id/analysis", async (req, res) => {
   const matchId = String(req.params.id);
 
@@ -838,7 +838,7 @@ app.get("/api/matches/:id/analysis", async (req, res) => {
   }
 });
 
-// Page principale
+// PAGE PRINCIPALE
 app.get("/", (req, res) => {
   return res.json({
     status: "OK",
@@ -849,7 +849,7 @@ app.get("/", (req, res) => {
   });
 });
 
-// Route inconnue
+// ROUTE INCONNUE
 app.use((req, res) => {
   return res.status(404).json({
     status: "ERROR",
@@ -858,5 +858,5 @@ app.use((req, res) => {
   });
 });
 
-// Gestion des erreurs
-app.use((error, req, res, ne
+// GESTION DES ERREURS
+app.use((error, req
