@@ -984,7 +984,24 @@ app.use((error, req, res, next) => {
   });
 });
 
+
 app.use((req, res) => {
+  res.status(404).json({
+    status: "ERROR",
+    message: "Route introuvable."
+  });
+});
+
+// --------------------------------------------------
+// DEMARRAGE DU SERVEUR
+// --------------------------------------------------
+
+app.listen(PORT, "0.0.0.0", () => {
+  console.log(
+    `DRABO73 VIP PRONOS démarré sur le port ${PORT}`
+  );
+});
+.use((req, res) => {
   res.status(404).json({
     status: "ERROR",
     message: "Route introuvable."
