@@ -964,6 +964,28 @@ app.use((error, req, res, next) => {
 // DEMARRAGE DU SERVEUR
 // --------------------------------------------------
 
+app.use((req, res) => {
+  res.status(404).json({
+    status: "ERROR",
+    message: "Route introuvable."
+  });
+});
+
+app.use((error, req, res, next) => {
+  console.error("Erreur serveur :", error);
+
+  if (res.headersSent) {
+    return next(error);
+  }
+
+  res.status(error.status || 500).json({
+    status: "ERROR",
+    message: error.message || "Une erreur interne est survenue."
+  });
+});
+
 app.listen(PORT, "0.0.0.0", () => {
+  console.log(`DRABO73 VIP PRONOS actif sur le port ${PORT}`);
+});.listen(PORT, "0.0.0.0", () => {
   console.log(`DRABO73 VIP PRONOS actif sur le port ${PORT}`);
 });
