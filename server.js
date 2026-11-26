@@ -905,4 +905,39 @@ app.get("/api/admin/config", requireOwner, (req, res) => {
   });
 });
 
-app.
+app.app.get("/api/admin/cache/clear", requireOwner, (req, res) => {
+  cache.clear();
+
+  res.json({
+    status: "OK",
+    message: "Cache vidé."
+  });
+});
+
+// ROUTE 404
+app.use((req, res) => {
+  res.status(404).json({
+    status: "ERROR",
+    message: "Route introuvable.",
+    path: req.path
+  });
+});
+
+// GESTION DES ERREURS
+app.use((error, req, res, next) => {
+  console.error("Server error:", error);
+
+  if (res.headersSent) return next(error);
+
+  res.status(500).json({
+    status: "ERROR",
+    message: "Erreur interne du serveur."
+  });
+});
+
+// DEMARRAGE DU SERVEUR
+app.listen(PORT, "0.0.0.0", () => {
+  console.log("DRABO73 VIP PRONOS");
+  console.log("LA CONFIANCE RESTE");
+  console.log("Serveur actif sur le port", PORT);
+});
