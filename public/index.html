@@ -169,19 +169,54 @@ async function checkServer(){
  }
 }
 
+/* Vérifier les matchs réels et valides */
+function validMatches(data){
+ const list=Array.isArray(data?.matches)?data.matches:[];
+
+ return list.filter(m=>
+  m &&
+  m.homeTeam?.name &&
+  m.awayTeam?.name &&
+  m.utcDate &&
+  ["TIMED","SCHEDULED"].includes(m.status)
+ ).sort((a,b)=>
+  new Date(a.utcDate)-new Date(b.utcDate)
+ );
+}
+
+/* Charger d'abord les matchs du jour.
+   Si aucun match valide, charger les prochains matchs. */
 async function loadMatches(){
- document.getElementById("homeMatches").textContent="Chargement...";
- document.getElementById("matchesList").textContent="Chargement...";
+ document.getElementById("homeMatches").textContent="Chargement des matchs...";
+ document.getElementById("matchesList").textContent="Chargement des matchs...";
 
  try{
-  const data=await apiRequest("/api/matches/upcoming");
-  matches=Array.isArray(data.matches)?data.matches:[];
+  let data=await apiRequest("/api/matches");
+  let valid=validMatches(data);
+
+  if(valid.length===0){
+   data=await apiRequest("/api/matches/upcoming");
+   valid=validMatches(data);
+  }
+
+  matches=valid;
 
   document.getElementById("matchCount").textContent=matches.length;
 
+  if(matches.length===0){
+   document.getElementById("homeMatches").textContent=
+    "Aucun match programmé disponible pour le moment.";
+   document.getElementById("matchesList").textContent=
+    "Aucun match programmé disponible pour le moment.";
+   return;
+  }
+
   renderMatches("homeMatches");
   renderMatches("matchesList");
+
  }catch(e){
+  matches=[];
+  document.getElementById("matchCount").textContent="0";
   document.getElementById("homeMatches").textContent="Erreur : "+e.message;
   document.getElementById("matchesList").textContent="Erreur : "+e.message;
  }
@@ -229,7 +264,9 @@ async function refreshData(){
 
  if(historyLoaded){
   document.getElementById("connectionStatus").textContent=
-   "Serveur connecté • "+historyMatches.length+" résultats historiques chargés.";
+   "Serveur connecté • "+matches.length+
+   " matchs disponibles • "+historyMatches.length+
+   " résultats historiques chargés.";
  }
 }
 
@@ -256,12 +293,16 @@ function createMatchCard(m,i){
  const date=document.createElement("p");
  date.className="date";
  date.textContent=m.utcDate?
-  new Date(m.utcDate).toLocaleString("fr-FR",{timeZone:"Africa/Ouagadougou"}):
+  new Date(m.utcDate).toLocaleString("fr-FR",{
+   timeZone:"Africa/Ouagadougou",
+   dateStyle:"full",
+   timeStyle:"short"
+  }):
   "Date inconnue";
 
  const teams=document.createElement("div");
  teams.className="team";
- teams.textContent=(m.homeTeam?.name||"Domicile")+" VS "+(m.awayTeam?.name||"Extérieur");
+ teams.textContent=m.homeTeam.name+" VS "+m.awayTeam.name;
 
  const state=document.createElement("p");
  state.className="small";
@@ -404,7 +445,7 @@ function showAnalysis(index){
 
  const title=document.createElement("h3");
  title.className="gold";
- title.textContent=(m.homeTeam?.name||"Domicile")+" VS "+(m.awayTeam?.name||"Extérieur");
+ title.textContent=m.homeTeam.name+" VS "+m.awayTeam.name;
  box.appendChild(title);
 
  const info=document.createElement("p");
@@ -497,7 +538,9 @@ function addText(box,label,value){
  p.textContent=label+" : "+value;
  box.appendChild(p);
 }
+</script>
 
+<script>
 function loadHistory(){
  const box=document.getElementById("historyList");
  box.innerHTML="";
@@ -539,7 +582,7 @@ function checkVIP(){
  msg.className=code?"gold":"error";
 }
 
-/* Démarrage : charger les données avant utilisation */
+/* Démarrage de l'application */
 async function initializeApp(){
  await Promise.all([
   checkServer(),
@@ -551,7 +594,7 @@ async function initializeApp(){
 
  if(historyLoaded){
   document.getElementById("connectionStatus").textContent=
-   "Connecté • "+matches.length+" matchs à venir • "+
+   "Connecté • "+matches.length+" matchs disponibles • "+
    historyMatches.length+" résultats historiques.";
  }
 }
