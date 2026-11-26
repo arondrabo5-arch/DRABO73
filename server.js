@@ -28,6 +28,7 @@ const CACHE_TTL = 120000;
 const cache = new Map();
 const ownerAttempts = new Map();
 
+app.set("trust proxy", 1);
 app.use(express.json({ limit: "2mb" }));
 app.use(express.urlencoded({ extended: true }));
 
@@ -171,12 +172,10 @@ async function footballRequest(endpoint, query = {}) {
   const token = getToken();
 
   if (!token) {
-    const error = new Error(
-      "Clé FOOTBALL_DATA_API_KEY non configurée sur Render."
+    throw Object.assign(
+      new Error("Clé FOOTBALL_DATA_API_KEY non configurée sur Render."),
+      { status: 503 }
     );
-
-    error.status = 503;
-    throw error;
   }
 
   const url = new URL(`${API_BASE}${endpoint}`);
@@ -206,7 +205,6 @@ async function footballRequest(endpoint, query = {}) {
     });
 
     const raw = await response.text();
-
     let data;
 
     try {
@@ -465,19 +463,14 @@ function createPrediction(home, away) {
     };
   }
 
-  const homeAttack = home.averageGoalsFor;
-  const awayAttack = away.averageGoalsFor;
-  const homeDefense = home.averageGoalsAgainst;
-  const awayDefense = away.averageGoalsAgainst;
-
   const homeGoals = Math.max(
     0,
-    (homeAttack + awayDefense) / 2 + 0.25
+    (home.averageGoalsFor + away.averageGoalsAgainst) / 2 + 0.25
   );
 
   const awayGoals = Math.max(
     0,
-    (awayAttack + homeDefense) / 2 - 0.15
+    (away.averageGoalsFor + home.averageGoalsAgainst) / 2 - 0.15
   );
 
   const h = Math.min(5, Math.round(homeGoals));
@@ -491,32 +484,27 @@ function createPrediction(home, away) {
   else if (difference < -0.35) main = "2";
   else main = "X";
 
-  const doubleChance = difference >= 0 ? "1X" : "X2";
-  const score = `${h}-${a}`;
-
-  const alternatives = [
-    `${Math.max(0, h - 1)}-${a}`,
-    `${h}-${Math.min(5, a + 1)}`
-  ];
-
   return {
     available: true,
     main,
-    doubleChance,
-    exactScore: score,
-    alternativeScores: alternatives,
+    doubleChance: difference >= 0 ? "1X" : "X2",
+    exactScore: `${h}-${a}`,
+    alternativeScores: [
+      `${Math.max(0, h - 1)}-${a}`,
+      `${h}-${Math.min(5, a + 1)}`
+    ],
     estimatedGoals: {
       home: Number(homeGoals.toFixed(2)),
       away: Number(awayGoals.toFixed(2))
     },
     confidence: null,
     confidenceMessage:
-      "Aucune garantie de réussite. Estimation statistique indicative."
+      "Estimation statistique indicative. Aucune garantie de réussite."
   };
 }
 
 async function analyzeMatch(match) {
-  if (!match.homeTeam.id || !match.awayTeam.id) {
+  if (!match.homeTeam?.id || !match.awayTeam?.id) {
     return {
       available: false,
       message: "Identifiants des équipes indisponibles."
@@ -648,14 +636,16 @@ app.get("/api/matches/upcoming", async (req, res) => {
 
     const matches = await fetchMatchesInPeriod(from, to);
 
+    const upcoming = matches.filter(m =>
+      ["SCHEDULED", "TIMED"].includes(m.status)
+    );
+
     res.json({
       status: "OK",
       dateFrom: from,
       dateTo: to,
-      total: matches.length,
-      matches: matches.filter(m =>
-        ["SCHEDULED", "TIMED"].includes(m.status)
-      )
+      total: upcoming.length,
+      matches: upcoming
     });
   } catch (error) {
     sendError(res, error);
@@ -683,11 +673,7 @@ app.get("/api/matches", async (req, res) => {
       extra.competitions = req.query.competitions;
     }
 
-    const matches = await fetchMatchesInPeriod(
-      from,
-      to,
-      extra
-    );
+    const matches = await fetchMatchesInPeriod(from, to, extra);
 
     res.json({
       status: "OK",
@@ -737,8 +723,7 @@ app.get("/api/matches/:id/analysis", async (req, res) => {
     }
 
     const data = await footballRequest(`/matches/${id}`);
-    const match = data.match || data;
-    const analysis = await analyzeMatch(match);
+    const analysis = await analyzeMatch(data.match || data);
 
     res.json({
       status: "OK",
@@ -870,13 +855,17 @@ app.post("/api/admin/login", (req, res) => {
 
   ownerAttempts.delete(ip);
 
-  return res.json({
-    status: "OK",
-    token: createOwnerToken(),
-    role: "owner",
-    vip: true,
-    lifetime: true
-  });
+  try {
+    return res.json({
+      status: "OK",
+      token: createOwnerToken(),
+      role: "owner",
+      vip: true,
+      lifetime: true
+    });
+  } catch (error) {
+    return sendError(res, error);
+  }
 });
 
 app.get("/api/admin/status", requireOwner, (req, res) => {
@@ -903,43 +892,17 @@ app.get("/api/admin/config", requireOwner, (req, res) => {
 });
 
 // VIDER LE CACHE
-app.get("/api/admin/cache/clear", requireOwner, (req, res) => {
+app.post("/api/admin/cache/clear", requireOwner, (req, res) => {
   cache.clear();
 
   res.json({
-  status: "OK",
-  message: "Cache vidé."
-});
+    status: "OK",
+    message: "Cache vidé."
+  });
 });
 
+// --------------------------------------------------
 // ROUTE 404
-app.use((req, res) => {
-  res.status(404).json({
-    status: "ERROR",
-    message: "Route introuvable.",
-    path: req.path
-  });
-});
+// --------------------------------------------------
 
-// GESTION DES ERREURS
-app.use((error, req, res, next) => {
-  console.error("Server error:", error);
-
-  if (res.headersSent) return next(error);
-
-  res.status(500).json({
-    status: "ERROR",
-    message: "Erreur interne du serveur."
-  });
-});
-
-// DEMARRAGE DU SERVEUR
-app.listen(PORT, "0.0.0.0", () => {
-  console.log("------------------------------------");
-  console.log("DRABO73 VIP PRONOS");
-  console.log("LA CONFIANCE RESTE");
-  console.log("Serveur actif sur le port", PORT);
-  console.log("Fuseau horaire:", TIMEZONE);
-  console.log("Football API:", getToken() ? "CONFIGUREE" : "ABSENTE");
-  console.log("------------------------------------");
-});
+ap
