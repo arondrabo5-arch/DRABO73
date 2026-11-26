@@ -32,6 +32,10 @@ app.set("trust proxy", 1);
 app.use(express.json({ limit: "2mb" }));
 app.use(express.urlencoded({ extended: true }));
 
+// --------------------------------------------------
+// CORS
+// --------------------------------------------------
+
 app.use((req, res, next) => {
   res.header("Access-Control-Allow-Origin", "*");
   res.header(
@@ -43,7 +47,10 @@ app.use((req, res, next) => {
     "Content-Type,Authorization,x-admin-key"
   );
 
-  if (req.method === "OPTIONS") return res.sendStatus(204);
+  if (req.method === "OPTIONS") {
+    return res.sendStatus(204);
+  }
+
   next();
 });
 
@@ -99,8 +106,10 @@ function validatePeriod(from, to, maximum = MAX_PERIOD_DAYS) {
   }
 
   const days = Math.round(
-    (new Date(`${to}T00:00:00Z`) -
-      new Date(`${from}T00:00:00Z`)) / 86400000
+    (
+      new Date(`${to}T00:00:00Z`) -
+      new Date(`${from}T00:00:00Z`)
+    ) / 86400000
   );
 
   if (days > maximum) {
@@ -189,7 +198,9 @@ async function footballRequest(endpoint, query = {}) {
   const cacheKey = url.toString();
   const cached = cacheGet(cacheKey);
 
-  if (cached) return cached;
+  if (cached !== null) {
+    return cached;
+  }
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 25000);
@@ -237,7 +248,9 @@ async function footballRequest(endpoint, query = {}) {
       );
     }
 
-    if (error.status) throw error;
+    if (error.status) {
+      throw error;
+    }
 
     throw Object.assign(
       new Error("Impossible de contacter football-data.org."),
@@ -307,10 +320,15 @@ function createOwnerToken() {
 }
 
 function verifyOwnerToken(token) {
-  if (!token || !OWNER_TOKEN_SECRET) return false;
+  if (!token || !OWNER_TOKEN_SECRET) {
+    return false;
+  }
 
   const parts = String(token).split(".");
-  if (parts.length !== 2) return false;
+
+  if (parts.length !== 2) {
+    return false;
+  }
 
   const [payload, signature] = parts;
 
@@ -331,7 +349,10 @@ function verifyOwnerToken(token) {
       Buffer.from(payload, "base64url").toString("utf8")
     );
 
-    return data.role === "owner" && Number(data.exp) > Date.now();
+    return (
+      data.role === "owner" &&
+      Number(data.exp) > Date.now()
+    );
   } catch {
     return false;
   }
@@ -346,16 +367,25 @@ function getBearerToken(req) {
 }
 
 function isOwnerRequest(req) {
-  if (verifyOwnerToken(getBearerToken(req))) return true;
+  if (verifyOwnerToken(getBearerToken(req))) {
+    return true;
+  }
 
-  const supplied = String(req.headers["x-admin-key"] || "").trim();
+  const supplied = String(
+    req.headers["x-admin-key"] || ""
+  ).trim();
 
-  if (!OWNER_ACCESS_CODE || !supplied) return false;
+  if (!OWNER_ACCESS_CODE || !supplied) {
+    return false;
+  }
 
   const a = Buffer.from(supplied);
   const b = Buffer.from(OWNER_ACCESS_CODE);
 
-  return a.length === b.length && crypto.timingSafeEqual(a, b);
+  return (
+    a.length === b.length &&
+    crypto.timingSafeEqual(a, b)
+  );
 }
 
 function requireOwner(req, res, next) {
@@ -405,8 +435,10 @@ function calculateTeamForm(matches, teamId) {
   const finished = matches
     .filter(match =>
       match.status === "FINISHED" &&
-      (match.homeTeam.id === teamId ||
-       match.awayTeam.id === teamId)
+      (
+        match.homeTeam?.id === teamId ||
+        match.awayTeam?.id === teamId
+      )
     )
     .slice(-5);
 
@@ -421,22 +453,28 @@ function calculateTeamForm(matches, teamId) {
     const home = match.homeTeam.id === teamId;
 
     const scored = home
-      ? match.score.fullTime.home
-      : match.score.fullTime.away;
+      ? match.score?.fullTime?.home
+      : match.score?.fullTime?.away;
 
     const conceded = home
-      ? match.score.fullTime.away
-      : match.score.fullTime.home;
+      ? match.score?.fullTime?.away
+      : match.score?.fullTime?.home;
 
-    if (scored === null || conceded === null) continue;
+    if (scored == null || conceded == null) {
+      continue;
+    }
 
     played++;
     goalsFor += scored;
     goalsAgainst += conceded;
 
-    if (scored > conceded) wins++;
-    else if (scored === conceded) draws++;
-    else losses++;
+    if (scored > conceded) {
+      wins++;
+    } else if (scored === conceded) {
+      draws++;
+    } else {
+      losses++;
+    }
   }
 
   return {
@@ -475,14 +513,17 @@ function createPrediction(home, away) {
 
   const h = Math.min(5, Math.round(homeGoals));
   const a = Math.min(5, Math.round(awayGoals));
-
   const difference = homeGoals - awayGoals;
 
   let main;
 
-  if (difference > 0.35) main = "1";
-  else if (difference < -0.35) main = "2";
-  else main = "X";
+  if (difference > 0.35) {
+    main = "1";
+  } else if (difference < -0.35) {
+    main = "2";
+  } else {
+    main = "X";
+  }
 
   return {
     available: true,
@@ -611,7 +652,10 @@ app.get("/api/competitions", async (req, res) => {
   }
 });
 
-// Matchs du jour
+// --------------------------------------------------
+// MATCHS DU JOUR
+// --------------------------------------------------
+
 app.get("/api/matches/today", async (req, res) => {
   try {
     const date = getBurkinaDate();
@@ -628,7 +672,10 @@ app.get("/api/matches/today", async (req, res) => {
   }
 });
 
-// Matchs à venir
+// --------------------------------------------------
+// MATCHS A VENIR
+// --------------------------------------------------
+
 app.get("/api/matches/upcoming", async (req, res) => {
   try {
     const from = getBurkinaDate();
@@ -636,8 +683,8 @@ app.get("/api/matches/upcoming", async (req, res) => {
 
     const matches = await fetchMatchesInPeriod(from, to);
 
-    const upcoming = matches.filter(m =>
-      ["SCHEDULED", "TIMED"].includes(m.status)
+    const upcoming = matches.filter(match =>
+      ["SCHEDULED", "TIMED"].includes(match.status)
     );
 
     res.json({
@@ -652,7 +699,10 @@ app.get("/api/matches/upcoming", async (req, res) => {
   }
 });
 
-// Recherche par période
+// --------------------------------------------------
+// RECHERCHE PAR PERIODE
+// --------------------------------------------------
+
 app.get("/api/matches", async (req, res) => {
   try {
     const from = req.query.dateFrom || getBurkinaDate();
@@ -687,7 +737,10 @@ app.get("/api/matches", async (req, res) => {
   }
 });
 
-// Détail d'un match
+// --------------------------------------------------
+// DETAIL D'UN MATCH
+// --------------------------------------------------
+
 app.get("/api/matches/:id", async (req, res) => {
   try {
     const id = Number(req.params.id);
@@ -710,7 +763,10 @@ app.get("/api/matches/:id", async (req, res) => {
   }
 });
 
-// Analyse et pronostic
+// --------------------------------------------------
+// ANALYSE ET PRONOSTIC
+// --------------------------------------------------
+
 app.get("/api/matches/:id/analysis", async (req, res) => {
   try {
     const id = Number(req.params.id);
@@ -758,7 +814,10 @@ app.get("/api/matches/:id/prediction", async (req, res) => {
   }
 });
 
-// Historique des résultats réels
+// --------------------------------------------------
+// HISTORIQUE DES RESULTATS REELS
+// --------------------------------------------------
+
 app.get("/api/history", async (req, res) => {
   try {
     const to = req.query.dateTo || getBurkinaDate();
@@ -776,7 +835,7 @@ app.get("/api/history", async (req, res) => {
     const matches = await fetchMatchesInPeriod(from, to);
 
     const finished = matches.filter(
-      m => m.status === "FINISHED"
+      match => match.status === "FINISHED"
     );
 
     res.json({
@@ -784,15 +843,15 @@ app.get("/api/history", async (req, res) => {
       dateFrom: from,
       dateTo: to,
       total: finished.length,
-      matches: finished.map(m => ({
-        id: m.id,
-        date: m.utcDate,
-        competition: m.competition?.name || null,
-        homeTeam: m.homeTeam.name,
-        awayTeam: m.awayTeam.name,
-        homeScore: m.score.fullTime.home,
-        awayScore: m.score.fullTime.away,
-        status: m.status
+      matches: finished.map(match => ({
+        id: match.id,
+        date: match.utcDate,
+        competition: match.competition?.name || null,
+        homeTeam: match.homeTeam.name,
+        awayTeam: match.awayTeam.name,
+        homeScore: match.score?.fullTime?.home ?? null,
+        awayScore: match.score?.fullTime?.away ?? null,
+        status: match.status
       }))
     });
   } catch (error) {
@@ -849,169 +908,4 @@ app.post("/api/admin/login", (req, res) => {
 
     return res.status(401).json({
       status: "ERROR",
-      message: "Code administrateur incorrect."
-    });
-  }
-
-  ownerAttempts.delete(ip);
-
-  try {
-    return res.json({
-      status: "OK",
-      token: createOwnerToken(),
-      role: "owner",
-      vip: true,
-      lifetime: true
-    });
-  } catch (error) {
-    return sendError(res, error);
-  }
-});
-
-app.get("/api/admin/status", requireOwner, (req, res) => {
-  res.json({
-    status: "OK",
-    authenticated: true,
-    role: "owner",
-    vip: true
-  });
-});
-
-// --------------------------------------------------
-// ROUTES PROPRIETAIRE
-// --------------------------------------------------
-
-app.get("/api/admin/config", requireOwner, (req, res) => {
-  res.json({
-    status: "OK",
-    application: "DRABO73 VIP PRONOS",
-    timezone: TIMEZONE,
-    footballTokenConfigured: Boolean(getToken()),
-    plans: VIP_PLANS
-  });
-});
-
-// VIDER LE CACHE
-app.post("/api/admin/cache/clear", requireOwner, (req, res) => {
-  cache.clear();
-
-  res.json({
-    status: "OK",
-    message: "Cache vidé."
-  });
-});
-
-// --------------------------------------------------
-// ROUTE 404
-// --------------------------------------------------
-
-apapp.use((req, res) => {
-  res.status(404).json({
-    status: "ERROR",
-    message: "Route introuvable."
-  });
-});
-
-// --------------------------------------------------
-// GESTION DES ERREURS
-// --------------------------------------------------
-
-app.use((error, req, res, next) => {
-  console.error("Erreur serveur :", error);
-
-  if (res.headersSent) {
-    return next(error);
-  }
-
-  res.status(error.status || 500).json({
-    status: "ERROR",
-    message: error.message || "Une erreur interne est survenue."
-  });
-});
-
-// --------------------------------------------------
-// DEMARRAGE DU SERVEUR
-// --------------------------------------------------
-
-app.listen(PORT, "0.0.0.0", () => {
-  console.log(`DRABO73 VIP PRONOS actif sur le port ${PORT}`);
-});
-app.use((req, res) => {
-  res.status(404).json({
-    status: "ERROR",
-    message: "Route introuvable."
-  });
-});
-
-// --------------------------------------------------
-// GESTION DES ERREURS
-// --------------------------------------------------
-
-app.use((error, req, res, next) => {
-  console.error("Erreur serveur :", error);
-
-  if (res.headersSent) {
-    return next(error);
-  }
-
-  res.status(error.status || 500).json({
-    status: "ERROR",
-    message: error.message || "Une erreur interne est survenue."
-  });
-});
-
-// --------------------------------------------------
-// DEMARRAGE DU SERVEUR
-// --------------------------------------------------
-
-app.use((req, res) => {
-  res.status(404).json({
-    status: "ERROR",
-    message: "Route introuvable."
-  });
-});
-
-app.use((error, req, res, next) => {
-  console.error("Erreur serveur :", error);
-
-  if (res.headersSent) {
-    return next(error);
-  }
-
-  res.status(error.status || 500).json({
-    status: "ERROR",
-    message: error.message || "Une erreur interne est survenue."
-  });
-});
-
-
-app.use((req, res) => {
-  res.status(404).json({
-    status: "ERROR",
-    message: "Route introuvable."
-  });
-});
-
-// --------------------------------------------------
-// DEMARRAGE DU SERVEUR
-// --------------------------------------------------
-
-app.listen(PORT, "0.0.0.0", () => {
-  console.log(
-    `DRABO73 VIP PRONOS démarré sur le port ${PORT}`
-  );
-});
-.use((req, res) => {
-  res.status(404).json({
-    status: "ERROR",
-    message: "Route introuvable."
-  });
-});
-
-app.listen(PORT, () => {
-  console.log(`DRABO73 VIP PRONOS actif sur le port ${PORT}`);
-});.listen(PORT, "0.0.0.0", () => {
-  console.log(`DRABO73 VIP PRONOS actif sur le port ${PORT}`);
-});.listen(PORT, "0.0.0.0", () => {
-  console.log(`DRABO73 VIP PRONOS actif sur le port ${PORT}`);
-});
+      message: "Code administrateur incorre
