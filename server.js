@@ -2,8 +2,6 @@
 import express from "express";
 import crypto from "crypto";
 import dotenv from "dotenv";
-import path from "path";
-import { fileURLToPath } from "url";
 
 dotenv.config();
 
@@ -11,9 +9,6 @@ const app = express();
 const PORT = Number(process.env.PORT) || 3000;
 const API_BASE = "https://api.football-data.org/v4";
 const TIMEZONE = "Africa/Ouagadougou";
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 const OWNER_ACCESS_CODE = (
   process.env.OWNER_ACCESS_CODE ||
@@ -64,8 +59,11 @@ function getBurkinaDate() {
   }).formatToParts(new Date());
 
   const values = {};
+
   for (const part of parts) {
-    if (part.type !== "literal") values[part.type] = part.value;
+    if (part.type !== "literal") {
+      values[part.type] = part.value;
+    }
   }
 
   return `${values.year}-${values.month}-${values.day}`;
@@ -176,6 +174,7 @@ async function footballRequest(endpoint, query = {}) {
     const error = new Error(
       "Clé FOOTBALL_DATA_API_KEY non configurée sur Render."
     );
+
     error.status = 503;
     throw error;
   }
@@ -209,6 +208,7 @@ async function footballRequest(endpoint, query = {}) {
     const raw = await response.text();
 
     let data;
+
     try {
       data = raw ? JSON.parse(raw) : {};
     } catch {
@@ -486,14 +486,12 @@ function createPrediction(home, away) {
   const difference = homeGoals - awayGoals;
 
   let main;
+
   if (difference > 0.35) main = "1";
   else if (difference < -0.35) main = "2";
   else main = "X";
 
-  const doubleChance = difference >= 0
-    ? "1X"
-    : "X2";
-
+  const doubleChance = difference >= 0 ? "1X" : "X2";
   const score = `${h}-${a}`;
 
   const alternatives = [
@@ -629,7 +627,6 @@ app.get("/api/competitions", async (req, res) => {
 app.get("/api/matches/today", async (req, res) => {
   try {
     const date = getBurkinaDate();
-
     const matches = await fetchMatchesInPeriod(date, date);
 
     res.json({
@@ -741,7 +738,6 @@ app.get("/api/matches/:id/analysis", async (req, res) => {
 
     const data = await footballRequest(`/matches/${id}`);
     const match = data.match || data;
-
     const analysis = await analyzeMatch(match);
 
     res.json({
@@ -825,6 +821,7 @@ app.get("/api/history", async (req, res) => {
 
 app.post("/api/admin/login", (req, res) => {
   const ip = req.ip || "unknown";
+
   const attempts = ownerAttempts.get(ip) || {
     count: 0,
     blockedUntil: 0
@@ -911,73 +908,4 @@ app.get("/api/admin/cache/clear", requireOwner, (req, res) => {
 
   res.json({
     status: "OK",
-    message: "Cache vidé."
-  });
-});
-
-// ROUTE 404
-app.use((req, res) => {
-  res.status(404).json({
-    status: "ERROR",
-    message: "Route introuvable.",
-    path: req.path
-  });
-});
-
-// GESTION DES ERREURS
-app.use((error, req, res, next) => {
-  console.error("Server error:", error);
-
-  if (res.headersSent) return next(error);
-
-  res.status(500).json({
-    status: "ERROR",
-    message: "Erreur interne du serveur."
-  });
-});
-
-// DEMARRAGE DU SERVEUR
-app.listen(PORT, "0.0.0.0", () => {
-  console.log("------------------------------------");
-  console.log("DRABO73 VIP PRONOS");
-  console.log("LA CONFIANCE RESTE");
-  console.log("Serveur actif sur le port", PORT);
-  console.log("Fuseau horaire:", TIMEZONE);
-  console.log("Football API:", getToken() ? "CONFIGUREE" : "ABSENTE");
-  console.log("------------------------------------");
-});get("/api/admin/cache/clear", requireOwner, (req, res) => {
-  cache.clear();
-
-  res.json({
-    status: "OK",
-    message: "Cache vidé."
-  });
-});
-
-// ROUTE 404
-app.use((req, res) => {
-  res.status(404).json({
-    status: "ERROR",
-    message: "Route introuvable.",
-    path: req.path
-  });
-});
-
-// GESTION DES ERREURS
-app.use((error, req, res, next) => {
-  console.error("Server error:", error);
-
-  if (res.headersSent) return next(error);
-
-  res.status(500).json({
-    status: "ERROR",
-    message: "Erreur interne du serveur."
-  });
-});
-
-// DEMARRAGE DU SERVEUR
-app.listen(PORT, "0.0.0.0", () => {
-  console.log("DRABO73 VIP PRONOS");
-  console.log("LA CONFIANCE RESTE");
-  console.log("Serveur actif sur le port", PORT);
-});
+    message: "Cache vid
