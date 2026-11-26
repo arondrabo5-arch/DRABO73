@@ -906,3 +906,34 @@ app.post("/api/admin/cache/clear", requireOwner, (req, res) => {
 // --------------------------------------------------
 
 ap
+app.use((req, res) => {
+  res.status(404).json({
+    status: "ERROR",
+    message: "Route introuvable."
+  });
+});
+
+// --------------------------------------------------
+// GESTION DES ERREURS
+// --------------------------------------------------
+
+app.use((error, req, res, next) => {
+  console.error("Erreur serveur :", error);
+
+  if (res.headersSent) {
+    return next(error);
+  }
+
+  res.status(error.status || 500).json({
+    status: "ERROR",
+    message: error.message || "Une erreur interne est survenue."
+  });
+});
+
+// --------------------------------------------------
+// DEMARRAGE DU SERVEUR
+// --------------------------------------------------
+
+app.listen(PORT, "0.0.0.0", () => {
+  console.log(`DRABO73 VIP PRONOS actif sur le port ${PORT}`);
+});
