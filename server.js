@@ -984,7 +984,16 @@ app.use((error, req, res, next) => {
   });
 });
 
-app.listen(PORT, "0.0.0.0", () => {
+app.use((req, res) => {
+  res.status(404).json({
+    status: "ERROR",
+    message: "Route introuvable."
+  });
+});
+
+app.listen(PORT, () => {
+  console.log(`DRABO73 VIP PRONOS actif sur le port ${PORT}`);
+});.listen(PORT, "0.0.0.0", () => {
   console.log(`DRABO73 VIP PRONOS actif sur le port ${PORT}`);
 });.listen(PORT, "0.0.0.0", () => {
   console.log(`DRABO73 VIP PRONOS actif sur le port ${PORT}`);
