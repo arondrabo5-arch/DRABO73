@@ -907,9 +907,9 @@ app.get("/api/admin/cache/clear", requireOwner, (req, res) => {
   cache.clear();
 
   res.json({
-    status: "OK",
-    message: "Cache vidmessage: "Cache vidé."
-  });
+  status: "OK",
+  message: "Cache vidé."
+});
 });
 
 // ROUTE 404
